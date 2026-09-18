@@ -3,13 +3,16 @@ const router = express.Router();
 
 const validationMiddleware = require("../../middlewares/validation.middleware");
 
+
 const {
   registerValidation,
+  loginValidation
 } = require("../../validations/users/user.validator");
 
 const {
   register,
   verifyEmail,
+  login
 } = require("../../controllers/users/user.controller");
 
 router.post(
@@ -17,6 +20,13 @@ router.post(
   registerValidation,
   validationMiddleware,
   register
+);
+
+router.post(
+  "/login",
+  loginValidation,
+  validationMiddleware,
+  login
 );
 
 router.get("/verify-email", verifyEmail);

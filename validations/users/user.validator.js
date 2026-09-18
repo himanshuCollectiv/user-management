@@ -37,6 +37,18 @@ const registerValidation = [
     .withMessage("City cannot exceed 100 characters"),
 ];
 
+const loginValidation = [
+  body("email")
+    .trim()
+    .isEmail()
+    .withMessage("Please provide a valid email"),
+
+  body("password")
+    .notEmpty()
+    .withMessage("Password is required"),
+];
+
 module.exports = {
   registerValidation,
+  loginValidation,
 };

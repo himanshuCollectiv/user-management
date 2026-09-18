@@ -4,23 +4,32 @@ const userManager = require("../../data/managers/users/user.manager");
 const asyncHandler = require("../../utils/asyncHandler");
 const ApiError = require("../../utils/ApiError");
 
-const {
-  hashPassword,
-} = require("../../utils/password.util");
+const { hashPassword, } = require("../../utils/password.util");
 
 const {
   generateToken,
   hashToken,
-} = require("../../utils/emailToken.util");
+} = require("../../utils/token.util");
+
+const { sendVerificationEmail,} = require("../../services/email.service");
+
+
+const { comparePassword } = require("../../utils/password.utils");
 
 const {
-  sendVerificationEmail,
-} = require("../../services/email.service");
+  generateAccessToken,
+  generateRefreshToken,
+} = require("../../utils/jwt.utils");
 
-const USER_ROLE = require("../../lib/roles");
 
-const TOKEN_TYPE = require("../../lib/user-token-types")
+const { USER_ROLE } = require("../../lib/roles");
 
+const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
+
+
+
+
+//register controller
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, state, city } = req.body;
 
@@ -105,7 +114,7 @@ const register = asyncHandler(async (req, res) => {
       {
         user_id: user.id,
         token_hash: tokenHash,
-        token_type: TOKEN_TYPE.EMAIL_VERIFICATION,
+        token_type: USER_TOKEN_TYPES.EMAIL_VERIFICATION,
         expires_at: expiresAt,
       },
       transaction
@@ -142,6 +151,8 @@ const register = asyncHandler(async (req, res) => {
 });
 
 
+
+// verify-email controller
 const verifyEmail = asyncHandler(async (req, res) => {
   const { token } = req.query;
 
@@ -199,7 +210,91 @@ const verifyEmail = asyncHandler(async (req, res) => {
   }
 });
 
+
+
+//login controller
+const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  // 1. Find user
+  const user = await userManager.findUserByEmail(email);
+
+  if (!user) {
+    throw new ApiError(401, "Invalid email or password");
+  }
+
+  // 2. Check password
+  const isPasswordValid = await comparePassword(
+    password,
+    user.password_hash
+  );
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid email or password");
+  }
+
+  // 3. Check email verification
+  if (!user.is_email_verified) {
+    throw new ApiError(401, "Invalid email or password");
+  }
+
+  // 4. Generate refresh token
+  const refreshToken = generateRefreshToken({
+    userId: user.id,
+  });
+
+  // 5. Hash refresh token
+  const refreshTokenHash = hashToken(refreshToken);
+
+  // 6. Create new token family
+  const familyId = crypto.randomUUID();
+
+  // 7. Refresh token expiry
+  const expiresAt = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  // 8. Save refresh token in DB
+  const savedRefreshToken = await userManager.createRefreshToken({
+    user_id: user.id,
+    family_id: familyId,
+    token_hash: refreshTokenHash,
+    expires_at: expiresAt,
+  });
+
+  if (!savedRefreshToken) {
+    throw new ApiError(500, "Failed to create refresh token");
+  }
+
+  // 9. Generate access token
+  const accessToken = generateAccessToken({
+    userId: user.id,
+    role: user.role,
+  });
+
+  // 10. Store access token in HttpOnly cookie
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 15 * 60 * 1000,
+  });
+
+  // 11. Send response
+  res.status(200).json({
+    success: true,
+    message: "Login successful",
+    data: {
+      familyId,
+    },
+  });
+});
+
+
+
+
 module.exports = {
   register,
-  verifyEmail
+  verifyEmail,
+  login
 };

@@ -1,6 +1,9 @@
 const User = require("../../models/users/user.model");
 const Location = require("../../models/locations/location.model");
 const UserToken = require("../../models/users/user-token.model");
+const RefreshToken = require("../../models/users/refresh-token.model");
+
+
 
 const findUserByEmail = async (email, transaction) => {
   return await User.findOne({
@@ -80,6 +83,9 @@ const deleteUserToken = async (tokenId, transaction) => {
   });
 };
 
+const createRefreshToken = async (tokenData, transaction) => {
+  return await RefreshToken.create(tokenData);
+};
 
 
 module.exports = {
@@ -92,4 +98,5 @@ module.exports = {
   findUserToken,
   updateUserEmailVerified,
   deleteUserToken,
+  createRefreshToken
 };
