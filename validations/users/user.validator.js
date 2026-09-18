@@ -13,8 +13,7 @@ const registerValidation = [
     .notEmpty()
     .withMessage("Email is required")
     .isEmail()
-    .withMessage("Please provide a valid email")
-    .normalizeEmail(),
+    .withMessage("Please provide a valid email"),
 
   body("password")
     .notEmpty()

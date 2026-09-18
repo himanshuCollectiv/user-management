@@ -88,6 +88,26 @@ const createRefreshToken = async (tokenData, transaction) => {
 };
 
 
+const findCurrentRefreshToken = async (userId, familyId) => {
+  return await RefreshToken.findOne({
+    where: {
+      user_id: userId,
+      family_id: familyId,
+      revoked_at: null,
+      replaced_by_id: null,
+    },
+  });
+};
+
+const updateRefreshToken = async (tokenId, data) => {
+  return await RefreshToken.update(data, {
+    where: {
+      id: tokenId,
+    },
+  });
+};
+
+
 module.exports = {
   findUserByEmail,
   createUser,
@@ -98,5 +118,7 @@ module.exports = {
   findUserToken,
   updateUserEmailVerified,
   deleteUserToken,
-  createRefreshToken
+  createRefreshToken,
+  findCurrentRefreshToken,
+  updateRefreshToken
 };

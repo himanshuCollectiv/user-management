@@ -12,22 +12,15 @@ const {
 const {
   register,
   verifyEmail,
-  login
+  login,
+  refreshToken
 } = require("../../controllers/users/user.controller");
 
-router.post(
-  "/register",
-  registerValidation,
-  validationMiddleware,
-  register
-);
+router.post("/register",registerValidation,validationMiddleware, register);
 
-router.post(
-  "/login",
-  loginValidation,
-  validationMiddleware,
-  login
-);
+router.post("/login",loginValidation,validationMiddleware,login);
+
+router.post("/refresh", refreshToken);
 
 router.get("/verify-email", verifyEmail);
 

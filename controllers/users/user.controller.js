@@ -14,11 +14,12 @@ const {
 const { sendVerificationEmail,} = require("../../services/email.service");
 
 
-const { comparePassword } = require("../../utils/password.utils");
+const { comparePassword } = require("../../utils/password.util");
 
 const {
   generateAccessToken,
   generateRefreshToken,
+  verifyRefreshToken,
 } = require("../../utils/jwt.utils");
 
 
@@ -33,6 +34,7 @@ const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, state, city } = req.body;
 
+  console.log("name", name);
   const transaction = await sequelize.transaction();
 
   try {
@@ -83,6 +85,8 @@ const register = asyncHandler(async (req, res) => {
         },
         transaction
       );
+
+      user = existingUser;
     } else {
       // 5. Create new user
       user = await userManager.createUser(
@@ -219,6 +223,8 @@ const login = asyncHandler(async (req, res) => {
   // 1. Find user
   const user = await userManager.findUserByEmail(email);
 
+
+
   if (!user) {
     throw new ApiError(401, "Invalid email or password");
   }
@@ -228,6 +234,7 @@ const login = asyncHandler(async (req, res) => {
     password,
     user.password_hash
   );
+
 
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid email or password");
@@ -280,7 +287,15 @@ const login = asyncHandler(async (req, res) => {
     maxAge: 15 * 60 * 1000,
   });
 
-  // 11. Send response
+  // 11. Store refresh token in httpOnly cookie
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  // 12. Send response
   res.status(200).json({
     success: true,
     message: "Login successful",
@@ -292,9 +307,133 @@ const login = asyncHandler(async (req, res) => {
 
 
 
+//refresh controller
+const refreshToken = asyncHandler(async (req, res) => {
+  // 1. Get refresh token from cookie
+  const refreshToken = req.cookies.refreshToken;
+
+  // 2. Get family ID from request body
+  const { familyId } = req.body;
+
+
+
+  if (!refreshToken) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  if (!familyId) {
+    throw new ApiError(400, "Family ID is required");
+  }
+
+  // 3. Verify refresh token
+  let decoded;
+
+ try {
+  decoded = verifyRefreshToken(refreshToken);
+
+  console.log("DECODED:", decoded);
+} catch (error) {
+  console.log("REFRESH JWT ERROR:", error.message);
+
+  throw new ApiError(
+    401,
+    "Invalid or expired refresh token"
+  );
+}
+
+  const userId = decoded.userId;
+
+  // 4. Find current refresh token
+  const storedToken = await userManager.findCurrentRefreshToken(
+    userId,
+    familyId
+  );
+
+ 
+
+  if (!storedToken) {
+    throw new ApiError(
+      401,
+      "Invalid or expired refresh token"
+    );
+  }
+
+  // 5. Hash incoming refresh token
+  const refreshTokenHash = hashToken(refreshToken);
+
+  // 6. Compare with stored hash
+  if (refreshTokenHash !== storedToken.token_hash) {
+    throw new ApiError(
+      401,
+      "Invalid or expired refresh token"
+    );
+  }
+
+  
+  // 7. Generate new refresh token
+  const newRefreshToken = generateRefreshToken({
+    userId,
+  });
+
+  // 8. Hash new refresh token
+  const newRefreshTokenHash = hashToken(newRefreshToken);
+
+  // 9. Generate new token ID/family stays same
+  const newRefreshTokenRecord = await userManager.createRefreshToken({
+    user_id: userId,
+    family_id: familyId,
+    token_hash: newRefreshTokenHash,
+    expires_at: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ),
+  });
+
+  // 10. Revoke old token and link it to new token
+  await userManager.updateRefreshToken(
+    storedToken.id,
+    {
+      revoked_at: new Date(),
+      replaced_by_id: newRefreshTokenRecord.id,
+    }
+  );
+
+  // 11. Generate new access token
+  const newAccessToken = generateAccessToken({
+    userId: userId,
+    role: decoded.role,
+  });
+
+  // 12. Update access token cookie
+  res.cookie("accessToken", newAccessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 15 * 60 * 1000,
+  });
+
+  // 13. Update refresh token cookie
+  res.cookie("refreshToken", newRefreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  // 14. Response
+  res.status(200).json({
+    success: true,
+    message: "Token refreshed successfully",
+    data: {
+      familyId,
+    },
+  });
+});
+
+
 
 module.exports = {
   register,
   verifyEmail,
-  login
+  login,
+  refreshToken
 };
