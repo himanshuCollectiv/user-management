@@ -674,6 +674,22 @@ const getMyProfile = asyncHandler(async (req, res) => {
 
 
 
+//me
+const getCurrentUser = asyncHandler(async (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "User is logged in",
+    data: {
+      isLoggedIn: true,
+      user: {
+        userId: req.user.userId,
+        role: req.user.role,
+      },
+    },
+  });
+});
+
+
 module.exports = {
   register,
   verifyEmail,
@@ -683,5 +699,6 @@ module.exports = {
   forgotPassword,
   resetPassword,
   changePassword,
-  getMyProfile
+  getMyProfile,
+  getCurrentUser
 };
