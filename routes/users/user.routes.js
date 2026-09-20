@@ -5,7 +5,7 @@ const validationMiddleware = require("../../middlewares/validation.middleware");
 
 const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation } = require("../../validations/users/user.validator");
 
-const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword } = require("../../controllers/users/user.controller");
+const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile } = require("../../controllers/users/user.controller");
 
 const authMiddleware = require("../../middlewares/auth.middleware")
 
@@ -26,5 +26,7 @@ router.post("/forgot-password", forgotPasswordValidation, validationMiddleware, 
 router.post("/reset-password", resetPasswordValidation, validationMiddleware, resetPassword);
 
 router.post("/change-password", authMiddleware, changePasswordValidation, validationMiddleware, changePassword);
+
+router.get("/profile", authMiddleware, getMyProfile);
 
 module.exports = router;

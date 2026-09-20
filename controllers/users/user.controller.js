@@ -646,6 +646,32 @@ const changePassword = asyncHandler(async (req, res) => {
 
 
 
+//getUserProfile
+const getMyProfile = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department_id: user.department_id,
+      designation_id: user.designation_id,
+      location_id: user.location_id,
+      is_email_verified: user.is_email_verified,
+      is_active: user.is_active,
+    },
+  });
+});
+
 
 
 module.exports = {
@@ -656,5 +682,6 @@ module.exports = {
   logout,
   forgotPassword,
   resetPassword,
-  changePassword
+  changePassword,
+  getMyProfile
 };
