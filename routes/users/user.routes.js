@@ -3,10 +3,11 @@ const router = express.Router();
 
 const validationMiddleware = require("../../middlewares/validation.middleware");
 
-const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation } = require("../../validations/users/user.validator");
+const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation } = require("../../validations/users/user.validator");
 
-const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword } = require("../../controllers/users/user.controller");
+const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword } = require("../../controllers/users/user.controller");
 
+const authMiddleware = require("../../middlewares/auth.middleware")
 
 
 //routes
@@ -23,5 +24,7 @@ router.post("/logout",logout);
 router.post("/forgot-password", forgotPasswordValidation, validationMiddleware, forgotPassword);
 
 router.post("/reset-password", resetPasswordValidation, validationMiddleware, resetPassword);
+
+router.post("/change-password", authMiddleware, changePasswordValidation, validationMiddleware, changePassword);
 
 module.exports = router;

@@ -108,7 +108,9 @@ const updateRefreshToken = async (tokenId, data) => {
 };
 
 
-
+const findUserById = async (userId) => {
+  return await User.findByPk(userId);
+};
 
 
 module.exports = {
@@ -123,5 +125,6 @@ module.exports = {
   deleteUserToken,
   createRefreshToken,
   findCurrentRefreshToken,
-  updateRefreshToken
+  updateRefreshToken,
+  findUserById
 };

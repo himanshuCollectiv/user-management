@@ -64,9 +64,20 @@ const resetPasswordValidation = [
     .withMessage("Password must be at least 6 characters"),
 ];
 
+const changePasswordValidation = [
+  body("currentPassword")
+    .notEmpty()
+    .withMessage("Current password is required"),
+
+  body("newPassword")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
   forgotPasswordValidation,
-  resetPasswordValidation
+  resetPasswordValidation,
+  changePasswordValidation
 };

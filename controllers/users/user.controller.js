@@ -605,6 +605,49 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
+
+
+//change-password
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const userId = req.user.userId;
+
+  // Find logged-in user
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Check current password
+  const isPasswordValid = await comparePassword(
+    currentPassword,
+    user.password_hash
+  );
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Current password is incorrect");
+  }
+
+  // Hash new password
+  const passwordHash = await hashPassword(newPassword);
+
+  // Update password
+  await userManager.updateUser(userId, {
+    password_hash: passwordHash,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Password changed successfully",
+  });
+});
+
+
+
+
+
 module.exports = {
   register,
   verifyEmail,
@@ -612,5 +655,6 @@ module.exports = {
   refreshToken,
   logout,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  changePassword
 };
