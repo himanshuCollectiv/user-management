@@ -1,5 +1,7 @@
 const User = require("../../models/users/user.model");
 const Location = require("../../models/locations/location.model");
+const Department = require("../../models/departments/department.model")
+const Designation = require("../../models/designations/designation.model")
 const UserToken = require("../../models/users/user-token.model");
 const RefreshToken = require("../../models/users/refresh-token.model");
 
@@ -113,6 +115,39 @@ const findUserById = async (userId) => {
 };
 
 
+const findUserProfileById = async (userId) => {
+  return await User.findByPk(userId, {
+    attributes: [
+      "id",
+      "name",
+      "email",
+      "role",
+      "is_email_verified",
+      "is_active",
+      "can_edit_profile",
+      "last_seen_at",
+    ],
+    include: [
+      {
+        model: Department,
+        as: "department",
+        attributes: ["id", "name"],
+      },
+      {
+        model: Designation,
+        as: "designation",
+        attributes: ["id", "name"],
+      },
+      {
+        model: Location,
+        as: "location",
+        attributes: ["id", "state", "city"],
+      },
+    ],
+  });
+};
+
+
 module.exports = {
   findUserByEmail,
   createUser,
@@ -126,5 +161,6 @@ module.exports = {
   createRefreshToken,
   findCurrentRefreshToken,
   updateRefreshToken,
-  findUserById
+  findUserById,
+  findUserProfileById
 };

@@ -6,26 +6,19 @@ const ApiError = require("../../utils/ApiError");
 
 const { hashPassword, } = require("../../utils/password.util");
 
-const {
-  generateToken,
-  hashToken,
-} = require("../../utils/token.util");
+const { generateToken, hashToken } = require("../../utils/token.util");
 
 const { sendVerificationEmail, sendPasswordResetEmail,} = require("../../services/email.service");
 
-
 const { comparePassword } = require("../../utils/password.util");
 
-const {
-  generateAccessToken,
-  generateRefreshToken,
-  verifyRefreshToken,
-} = require("../../utils/jwt.utils");
-
+const { generateAccessToken, generateRefreshToken, verifyRefreshToken, } = require("../../utils/jwt.utils");
 
 const { USER_ROLE } = require("../../lib/roles");
 
 const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
+
+
 
 
 
@@ -650,7 +643,7 @@ const changePassword = asyncHandler(async (req, res) => {
 const getMyProfile = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
 
-  const user = await userManager.findUserById(userId);
+  const user = await userManager.findUserProfileById(userId);
 
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -663,11 +656,14 @@ const getMyProfile = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      department_id: user.department_id,
-      designation_id: user.designation_id,
-      location_id: user.location_id,
       is_email_verified: user.is_email_verified,
       is_active: user.is_active,
+      can_edit_profile: user.can_edit_profile,
+      last_seen_at: user.last_seen_at,
+
+      department: user.department,
+      designation: user.designation,
+      location: user.location,
     },
   });
 });
@@ -690,6 +686,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 
+//updateMyProfile
 const updateMyProfile = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
   const { name, state, city } = req.body;
@@ -780,5 +777,5 @@ module.exports = {
   getMyProfile,
   getCurrentUser,
   updateMyProfile,
-  
+
 };
