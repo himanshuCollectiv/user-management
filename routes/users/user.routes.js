@@ -3,9 +3,9 @@ const router = express.Router();
 
 const validationMiddleware = require("../../middlewares/validation.middleware");
 
-const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation } = require("../../validations/users/user.validator");
+const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation, updateProfileValidation } = require("../../validations/users/user.validator");
 
-const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser } = require("../../controllers/users/user.controller");
+const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser, updateMyProfile } = require("../../controllers/users/user.controller");
 
 const authMiddleware = require("../../middlewares/auth.middleware")
 
@@ -30,5 +30,7 @@ router.post("/change-password", authMiddleware, changePasswordValidation, valida
 router.get("/profile", authMiddleware, getMyProfile);
 
 router.get("/me", authMiddleware, getCurrentUser);
+
+router.patch("/profile", authMiddleware, updateProfileValidation, validationMiddleware, updateMyProfile);
 
 module.exports = router;

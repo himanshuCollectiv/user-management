@@ -74,10 +74,31 @@ const changePasswordValidation = [
     .withMessage("Password must be at least 6 characters"),
 ];
 
+const updateProfileValidation = [
+  body("name")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Name cannot be empty"),
+
+  body("state")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("State cannot be empty"),
+
+  body("city")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("City cannot be empty"),
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
   forgotPasswordValidation,
   resetPasswordValidation,
-  changePasswordValidation
+  changePasswordValidation,
+  updateProfileValidation
 };

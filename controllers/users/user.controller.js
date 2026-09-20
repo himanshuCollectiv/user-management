@@ -690,6 +690,84 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 
+const updateMyProfile = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+  const { name, state, city } = req.body;
+
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    const updateData = {};
+
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+
+    if (state !== undefined || city !== undefined) {
+      if (!state || !city) {
+        throw new ApiError(400, "State and city are required together");
+      }
+
+      let location = await userManager.findLocation(
+        state,
+        city,
+        transaction
+      );
+
+      if (!location) {
+        location = await userManager.createLocation(
+          state,
+          city,
+          transaction
+        );
+      }
+
+      updateData.location_id = location.id;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new ApiError(400, "No profile data provided");
+    }
+
+    await userManager.updateUser(
+      userId,
+      updateData,
+      transaction
+    );
+
+    await transaction.commit();
+
+    const updatedUser = await userManager.findUserById(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        department_id: updatedUser.department_id,
+        designation_id: updatedUser.designation_id,
+        location_id: updatedUser.location_id,
+      },
+    });
+  } catch (error) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    throw error;
+  }
+});
+
+
 module.exports = {
   register,
   verifyEmail,
@@ -700,5 +778,7 @@ module.exports = {
   resetPassword,
   changePassword,
   getMyProfile,
-  getCurrentUser
+  getCurrentUser,
+  updateMyProfile,
+  
 };
