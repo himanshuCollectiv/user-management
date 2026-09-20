@@ -56,14 +56,13 @@ const forgotPasswordValidation = [
 
 const resetPasswordValidation = [
   body("token")
-  .notEmpty()
-  .withMessage("Reset token is required"),
+    .notEmpty()
+    .withMessage("Reset token is required"),
 
   body("newPassword")
-   .isLength({ min: 8 })
-   .withMessage("Password must be at least 8 characters"),
-   
-  ];
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
+];
 
 module.exports = {
   registerValidation,
