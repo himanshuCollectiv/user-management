@@ -11,7 +11,7 @@ const {
   hashToken,
 } = require("../../utils/token.util");
 
-const { sendVerificationEmail,} = require("../../services/email.service");
+const { sendVerificationEmail, sendPasswordResetEmail,} = require("../../services/email.service");
 
 
 const { comparePassword } = require("../../utils/password.util");
@@ -431,9 +431,124 @@ const refreshToken = asyncHandler(async (req, res) => {
 
 
 
+//logout
+const logout = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+  const { familyId } = req.body;
+
+  if (!refreshToken) {
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  }
+
+  if (!familyId) {
+    throw new ApiError(400, "Family ID is required");
+  }
+
+  let decoded;
+
+  try {
+    decoded = verifyRefreshToken(refreshToken);
+  } catch (error) {
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  }
+
+  const userId = decoded.userId;
+
+  const storedToken = await userManager.findCurrentRefreshToken(
+    userId,
+    familyId
+  );
+
+  if (storedToken) {
+    await userManager.updateRefreshToken(
+      storedToken.id,
+      {
+        revoked_at: new Date(),
+      }
+    );
+  }
+
+  res.clearCookie("accessToken");
+  res.clearCookie("refreshToken");
+
+  res.status(200).json({
+    success: true,
+    message: "Logout successful",
+  });
+});
+
+
+
+//forgot password
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await userManager.findUserByEmail(email);
+
+  // Email exist nahi karti toh bhi same response
+  if (!user) {
+    return res.status(200).json({
+      success: true,
+      message: "If the email exists, a password reset link has been sent.",
+    });
+  }
+
+  // Generate reset token
+  const resetToken = generateToken();
+
+  // Hash token before storing
+  const tokenHash = hashToken(resetToken);
+
+  // Token expiry - 24 hours
+  const expiresAt = new Date(
+    Date.now() + 24 * 60 * 60 * 1000
+  );
+
+  // Save password reset token
+  await userManager.createUserToken({
+    user_id: user.id,
+    token_hash: tokenHash,
+    token_type: USER_TOKEN_TYPES.PASSWORD_RESET,
+    expires_at: expiresAt,
+  });
+
+  // Create reset link
+  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+  // Send email
+  await sendPasswordResetEmail({
+    to: user.email,
+    name: user.name,
+    resetLink,
+    expiryTime: "24 hours",
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "If the email exists, a password reset link has been sent.",
+  });
+});
+
+
+
+
 module.exports = {
   register,
   verifyEmail,
   login,
-  refreshToken
+  refreshToken,
+  logout,
+  forgotPassword
 };

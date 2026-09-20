@@ -47,7 +47,15 @@ const loginValidation = [
     .withMessage("Password is required"),
 ];
 
+const forgotPasswordValidation = [
+  body("email")
+    .trim()
+    .isEmail()
+    .withMessage("Please provide a valid email"),
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
+  forgotPasswordValidation
 };

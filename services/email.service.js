@@ -1,7 +1,10 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
 
-const verificationEmailTemplate = require("../templates/emails/verification.email.template")
+const verificationEmailTemplate = require("../templates/emails/verification.email.template");
+const passwordResetEmailTemplate = require(
+  "../templates/emails/password-reset-email.template"
+);
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -56,4 +59,23 @@ const sendVerificationEmail = async ({
   });
 };
 
-module.exports = { sendEmail, sendVerificationEmail };
+const sendPasswordResetEmail = async ({
+  to,
+  name,
+  resetLink,
+  expiryTime,
+}) => {
+  const html = passwordResetEmailTemplate({
+    name,
+    resetLink,
+    expiryTime,
+  });
+
+  return sendEmail({
+    to,
+    subject: "Reset Your Password - UMS",
+    html,
+  });
+};
+
+module.exports = { sendEmail, sendVerificationEmail, sendPasswordResetEmail };
