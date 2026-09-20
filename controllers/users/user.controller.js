@@ -543,6 +543,67 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
 
 
+//reset password 
+const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  // 1. Hash the raw reset token
+  const tokenHash = hashToken(token);
+
+  // 2. Find password reset token
+  const userToken = await userManager.findUserToken(
+    tokenHash,
+    USER_TOKEN_TYPES.PASSWORD_RESET
+  );
+
+  if (!userToken) {
+    throw new ApiError(400, "Invalid or expired reset token");
+  }
+
+  // 3. Check token expiry
+  if (userToken.expires_at < new Date()) {
+    throw new ApiError(400, "Invalid or expired reset token");
+  }
+
+  // 4. Hash new password
+  const passwordHash = await hashPassword(newPassword);
+
+  // 5. Start transaction
+  const transaction = await sequelize.transaction();
+
+  try {
+    // 6. Update password
+    await userManager.updateUser(
+      userToken.user_id,
+      {
+        password_hash: passwordHash,
+      },
+      transaction
+    );
+
+    // 7. Delete used reset token
+    await userManager.deleteUserToken(
+      userToken.id,
+      transaction
+    );
+
+    // 8. Commit transaction
+    await transaction.commit();
+  } catch (error) {
+    // 9. Rollback if transaction is still active
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    throw error;
+  }
+
+  // 10. Response
+  res.status(200).json({
+    success: true,
+    message: "Password reset successful",
+  });
+});
 
 module.exports = {
   register,
@@ -550,5 +611,6 @@ module.exports = {
   login,
   refreshToken,
   logout,
-  forgotPassword
+  forgotPassword,
+  resetPassword
 };
