@@ -6,7 +6,7 @@ const adminManager = require("../../data/managers/admin/admin.manager");
 const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 const { hashPassword } = require("../../utils/password.util");
-
+const normalizeText = require("../../utils/string.utils")
 
 //create-user-byAdmin
 const createUser = asyncHandler(async (req, res) => {
@@ -15,11 +15,17 @@ const createUser = asyncHandler(async (req, res) => {
     email,
     password,
     role,
-    state,
+  } = req.body;
+
+  let {state,
     city,
     department,
-    designation,
-  } = req.body;
+    designation,} = req.body
+
+  state = normalizeText(state);
+  city = normalizeText(city);
+  department = normalizeText(department);
+  designation = normalizeText(designation);
 
   const existingUser = await userManager.findUserByEmail(email);
 
@@ -186,11 +192,17 @@ const updateUser = asyncHandler(async (req, res) => {
     email,
     password,
     role,
-    state,
+  } = req.body;
+
+  let{ state,
     city,
     department,
-    designation,
-  } = req.body;
+    designation,}=req.body
+
+  state = normalizeText(state);
+  city = normalizeText(city);
+  department = normalizeText(department);
+  designation = normalizeText(designation);
 
   const userId = Number(id);
 
@@ -429,6 +441,76 @@ const deleteUser = asyncHandler(async (req, res) => {
   });
 });
 
+
+
+//findAllDepartment
+const getDepartments = asyncHandler(async (req, res) => {
+  const departments = await adminManager.findAllDepartments();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      departments,
+    },
+  });
+});
+
+
+
+//findAllDesignations
+const getDesignations = asyncHandler(async (req, res) => {
+  const { departmentId } = req.query;
+
+  if (!departmentId) {
+    throw new ApiError(400, "Department ID is required");
+  }
+
+  const designations = await adminManager.findAllDesignations(departmentId);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      designations,
+    },
+  });
+});
+
+
+
+//getState
+const getStates = asyncHandler(async (req, res) => {
+  const states = await adminManager.findAllStates();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      states: states.map((item) => item.state),
+    },
+  });
+});
+
+
+
+//getCity
+const getCities = asyncHandler(async (req, res) => {
+  const { state } = req.query;
+
+  if (!state) {
+    throw new ApiError(400, "State is required");
+  }
+
+  const cities = await adminManager.findCitiesByState(state);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      cities,
+    },
+  });
+});
+
+
+
 module.exports = {
   createUser,
   getUsers,
@@ -436,5 +518,9 @@ module.exports = {
   updateUser,
   deactivateUser,
   activateUser,
-  deleteUser
+  deleteUser,
+  getDepartments,
+  getDesignations,
+  getStates,
+  getCities
 };

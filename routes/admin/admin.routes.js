@@ -2,7 +2,7 @@ const express = require("express");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const adminMiddleware = require("../../middlewares/admin.middleware");
 const validationMiddleware = require("../../middlewares/validation.middleware");
-const { createUser, getUsers, getUserDetails, updateUser, deactivateUser, activateUser, deleteUser } = require("../../controllers/admin/admin.controller");
+const { createUser, getUsers, getUserDetails, updateUser, deactivateUser, activateUser, deleteUser, getDepartments, getDesignations, getStates, getCities } = require("../../controllers/admin/admin.controller");
 const { createUserValidation, updateUserValidation } = require("../../validations/admin/admin.validation");
 
 const router = express.Router();
@@ -17,6 +17,9 @@ router.patch("/users/:id", updateUserValidation, validationMiddleware, updateUse
 router.patch("/users/:id/deactivate", deactivateUser);
 router.patch("/users/:id/activate", activateUser);
 router.delete("/users/:id", deleteUser);
-
+router.get("/departments", getDepartments);
+router.get("/designations", getDesignations);
+router.get("/states", getStates);
+router.get("/cities", getCities);
 
 module.exports = router;

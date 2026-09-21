@@ -176,6 +176,41 @@ const deleteUser = async (userId) => {
   });
 };
 
+const findAllDepartments = async () => {
+  return await Department.findAll({
+    attributes: ["id", "name"],
+    order: [["name", "ASC"]],
+  });
+};
+
+const findAllDesignations = async (departmentId) => {
+  return await Designation.findAll({
+    where: {
+      department_id: departmentId,
+    },
+    attributes: ["id", "name"],
+    order: [["name", "ASC"]],
+  });
+};
+
+const findAllStates = async () => {
+  return await Location.findAll({
+    attributes: ["state"],
+    group: ["state"],
+    order: [["state", "ASC"]],
+  });
+};
+
+const findCitiesByState = async (state) => {
+  return await Location.findAll({
+    where: {
+      state,
+    },
+    attributes: ["id", "city"],
+    order: [["city", "ASC"]],
+  });
+};
+
 module.exports = {
   findDepartmentByName,
   findDesignationByName,
@@ -183,5 +218,9 @@ module.exports = {
   createDesignation,
   findAllUsers,
   findUserDetails,
-  deleteUser
+  deleteUser,
+  findAllDepartments,
+  findAllDesignations,
+  findAllStates,
+  findCitiesByState
 };

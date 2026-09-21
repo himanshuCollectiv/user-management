@@ -18,6 +18,8 @@ const { USER_ROLE } = require("../../lib/roles");
 
 const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
 
+const normalizeText = require("../../utils/string.utils")
+
 
 
 
@@ -25,7 +27,10 @@ const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
 
 //register controller
 const register = asyncHandler(async (req, res) => {
-  const { name, email, password, state, city } = req.body;
+  let { name, email, password, state, city } = req.body;
+
+  state = normalizeText(state);
+  city = normalizeText(city);
 
   console.log("name", name);
   const transaction = await sequelize.transaction();
@@ -36,6 +41,8 @@ const register = asyncHandler(async (req, res) => {
       email,
       transaction
     );
+
+
 
     // 2. Find existing location or create new location
     let location = await userManager.findLocation(
@@ -712,7 +719,10 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 //updateMyProfile
 const updateMyProfile = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
-  const { name, state, city } = req.body;
+  let { name, state, city } = req.body;
+
+  state = normalizeText(state);
+  city = normalizeText(city);
 
   const user = await userManager.findUserById(userId);
 
