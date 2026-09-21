@@ -6,7 +6,7 @@ const adminManager = require("../../data/managers/admin/admin.manager");
 const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 const { hashPassword } = require("../../utils/password.util");
-const normalizeText = require("../../utils/string.utils")
+const { normalizeText } = require("../../utils/string.utils")
 
 //create-user-byAdmin
 const createUser = asyncHandler(async (req, res) => {
