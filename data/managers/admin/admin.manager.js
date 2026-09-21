@@ -170,7 +170,11 @@ const findUserDetails = async (userId) => {
   });
 };
 
-
+const deleteUser = async (userId) => {
+  return await User.destroy({
+    where: { id: userId },
+  });
+};
 
 module.exports = {
   findDepartmentByName,
@@ -178,5 +182,6 @@ module.exports = {
   createDepartment,
   createDesignation,
   findAllUsers,
-  findUserDetails
+  findUserDetails,
+  deleteUser
 };

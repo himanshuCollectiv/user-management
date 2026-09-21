@@ -168,7 +168,7 @@ const findUserSessions = async (userId) => {
   });
 };
 
-const revokeAllUserSessions = async (userId) => {
+const revokeAllUserSessions = async (userId, transaction) => {
   return await RefreshToken.update(
     {
       revoked_at: new Date(),

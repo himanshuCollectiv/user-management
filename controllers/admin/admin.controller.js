@@ -377,10 +377,64 @@ const deactivateUser = asyncHandler(async (req, res) => {
   }
 });
 
+
+
+//activate-user
+const activateUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = Number(id);
+
+  if (userId === req.user.userId) {
+    throw new ApiError(403, "Admin cannot activate their own account");
+  }
+
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  await userManager.updateUser(userId, {
+    is_active: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "User activated successfully",
+  });
+});
+
+
+
+//delete-user
+const deleteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = Number(id);
+
+  if (userId === req.user.userId) {
+    throw new ApiError(403, "Admin cannot delete their own account");
+  }
+
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  await adminManager.deleteUser(userId);
+
+  res.status(200).json({
+    success: true,
+    message: "User deleted successfully",
+  });
+});
+
 module.exports = {
   createUser,
   getUsers,
   getUserDetails,
   updateUser,
-  deactivateUser
+  deactivateUser,
+  activateUser,
+  deleteUser
 };
