@@ -9,7 +9,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "pm2 start server.js --name ums --watch"
+    "dev": "pm2 start server.js --name ums --watch",
+    "seed:admin": "node seeders/admin.seed.js"
   },
   "keywords": [],
   "author": "",
