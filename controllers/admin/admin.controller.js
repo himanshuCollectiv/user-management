@@ -177,8 +177,168 @@ const getUserDetails = asyncHandler(async (req, res) => {
 });
 
 
+
+//update-user-data
+const updateUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    email,
+    password,
+    role,
+    state,
+    city,
+    department,
+    designation,
+  } = req.body;
+
+  const userId = Number(id);
+
+  if (userId === req.user.userId) {
+    throw new ApiError(403, "Admin cannot edit their own account");
+  }
+
+  const existingUser = await userManager.findUserById(userId);
+
+  if (!existingUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  if (email && email !== existingUser.email) {
+    const emailUser = await userManager.findUserByEmail(email);
+
+    if (emailUser && emailUser.id !== userId) {
+      throw new ApiError(409, "User with this email already exists");
+    }
+  }
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    const updateData = {};
+
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+
+    if (email !== undefined) {
+      updateData.email = email;
+    }
+
+    if (role !== undefined) {
+      updateData.role = role;
+    }
+
+    if (password !== undefined) {
+      updateData.password_hash = await hashPassword(password);
+    }
+
+    if (
+      state !== undefined ||
+      city !== undefined
+    ) {
+      if (!state || !city) {
+        throw new ApiError(
+          400,
+          "State and city are required together"
+        );
+      }
+
+      let location = await userManager.findLocation(
+        state,
+        city,
+        transaction
+      );
+
+      if (!location) {
+        location = await userManager.createLocation(
+          state,
+          city,
+          transaction
+        );
+      }
+
+      updateData.location_id = location.id;
+    }
+
+    if (department !== undefined) {
+      let departmentRecord =
+        await adminManager.findDepartmentByName(
+          department,
+          transaction
+        );
+
+      if (!departmentRecord) {
+        departmentRecord =
+          await adminManager.createDepartment(
+            department,
+            transaction
+          );
+      }
+
+      updateData.department_id = departmentRecord.id;
+
+      if (designation !== undefined) {
+        let designationRecord =
+          await adminManager.findDesignationByName(
+            designation,
+            departmentRecord.id,
+            transaction
+          );
+
+        if (!designationRecord) {
+          designationRecord =
+            await adminManager.createDesignation(
+              designation,
+              departmentRecord.id,
+              transaction
+            );
+        }
+
+        updateData.designation_id = designationRecord.id;
+      }
+    } else if (designation !== undefined) {
+      throw new ApiError(
+        400,
+        "Department is required when updating designation"
+      );
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new ApiError(400, "No data provided for update");
+    }
+
+    await userManager.updateUser(
+      userId,
+      updateData,
+      transaction
+    );
+
+    await transaction.commit();
+
+    const updatedUser =
+      await userManager.findUserProfileById(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: {
+        user: updatedUser,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
+
+
+
+
+
 module.exports = {
   createUser,
   getUsers,
-  getUserDetails
+  getUserDetails,
+  updateUser
 };
