@@ -5,7 +5,7 @@ const validationMiddleware = require("../../middlewares/validation.middleware");
 
 const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation, updateProfileValidation } = require("../../validations/users/user.validator");
 
-const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser, updateMyProfile, getMySessions } = require("../../controllers/users/user.controller");
+const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser, updateMyProfile, getMySessions, revokeSession } = require("../../controllers/users/user.controller");
 
 const authMiddleware = require("../../middlewares/auth.middleware")
 
@@ -34,5 +34,7 @@ router.get("/me", authMiddleware, getCurrentUser);
 router.patch("/profile", authMiddleware, updateProfileValidation, validationMiddleware, updateMyProfile);
 
 router.get("/sessions", authMiddleware, getMySessions);
+
+router.delete("/sessions/:familyId", authMiddleware, revokeSession);
 
 module.exports = router;

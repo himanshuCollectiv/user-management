@@ -213,6 +213,9 @@ const verifyEmail = asyncHandler(async (req, res) => {
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
+  const deviceInfo = req.headers["user-agent"];
+  const ipAddress = req.ip;
+
   // 1. Find user
   const user = await userManager.findUserByEmail(email);
 
@@ -260,6 +263,8 @@ const login = asyncHandler(async (req, res) => {
     family_id: familyId,
     token_hash: refreshTokenHash,
     expires_at: expiresAt,
+    device_info: deviceInfo,
+    ip_address: ipAddress,
   });
 
   if (!savedRefreshToken) {
@@ -376,9 +381,9 @@ const refreshToken = asyncHandler(async (req, res) => {
     user_id: userId,
     family_id: familyId,
     token_hash: newRefreshTokenHash,
-    expires_at: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
-    ),
+    expires_at: newExpiresAt,
+    device_info: storedToken.device_info,
+    ip_address: storedToken.ip_address,
   });
 
   // 10. Revoke old token and link it to new token
@@ -765,6 +770,8 @@ const updateMyProfile = asyncHandler(async (req, res) => {
 });
 
 
+
+//get-sessions
 const getMySessions = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
 
@@ -775,6 +782,39 @@ const getMySessions = asyncHandler(async (req, res) => {
     data: {
       sessions,
     },
+  });
+});
+
+
+
+//revoke-session
+const revokeSession = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+  const { familyId } = req.params;
+
+  if (!familyId) {
+    throw new ApiError(400, "Family ID is required");
+  }
+
+  const session = await userManager.findCurrentRefreshToken(
+    userId,
+    familyId
+  );
+
+  if (!session) {
+    throw new ApiError(404, "Session not found");
+  }
+
+  await userManager.updateRefreshToken(
+    session.id,
+    {
+      revoked_at: new Date(),
+    }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Session revoked successfully",
   });
 });
 
@@ -791,5 +831,6 @@ module.exports = {
   getMyProfile,
   getCurrentUser,
   updateMyProfile,
-  getMySessions
+  getMySessions,
+  revokeSession
 };

@@ -30,6 +30,16 @@ RefreshToken.init(
       unique: true,
     },
 
+    device_info: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    ip_address: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },    
+
     expires_at: {
       type: DataTypes.DATE,
       allowNull: false,

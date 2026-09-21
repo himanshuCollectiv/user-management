@@ -159,6 +159,8 @@ const findUserSessions = async (userId) => {
     },
     attributes: [
       "family_id",
+      "device_info",
+      "ip_address",
       "created_at",
       "expires_at",
     ],
