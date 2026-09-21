@@ -236,6 +236,10 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid email or password");
   }
 
+  if (!user.is_active) {
+    throw new ApiError(403, "Your account has been deactivated");
+  }
+
   // 3. Check email verification
   if (!user.is_email_verified) {
     throw new ApiError(401, "Invalid email or password");
@@ -347,7 +351,7 @@ const refreshToken = asyncHandler(async (req, res) => {
     familyId
   );
 
- 
+
 
   if (!storedToken) {
     throw new ApiError(
@@ -511,6 +515,10 @@ const forgotPassword = asyncHandler(async (req, res) => {
       success: true,
       message: "If the email exists, a password reset link has been sent.",
     });
+  }
+
+  if (!user.is_active) {
+    throw new ApiError(403, "Your account has been deactivated");
   }
 
   // Generate reset token
@@ -829,6 +837,7 @@ const revokeSession = asyncHandler(async (req, res) => {
 });
 
 
+
 module.exports = {
   register,
   verifyEmail,
@@ -842,5 +851,6 @@ module.exports = {
   getCurrentUser,
   updateMyProfile,
   getMySessions,
-  revokeSession
+  revokeSession,
+  
 };

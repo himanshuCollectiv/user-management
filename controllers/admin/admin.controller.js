@@ -334,11 +334,53 @@ const updateUser = asyncHandler(async (req, res) => {
 
 
 
+//deactivate-user
+const deactivateUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = Number(id);
 
+  if (userId === req.user.userId) {
+    throw new ApiError(403, "Admin cannot deactivate their own account");
+  }
+
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    await userManager.updateUser(
+      userId,
+      {
+        is_active: false,
+      },
+      transaction
+    );
+
+    await userManager.revokeAllUserSessions(
+      userId,
+      transaction
+    );
+
+    await transaction.commit();
+
+    res.status(200).json({
+      success: true,
+      message: "User deactivated successfully",
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
 
 module.exports = {
   createUser,
   getUsers,
   getUserDetails,
-  updateUser
+  updateUser,
+  deactivateUser
 };

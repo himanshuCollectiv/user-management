@@ -168,6 +168,21 @@ const findUserSessions = async (userId) => {
   });
 };
 
+const revokeAllUserSessions = async (userId) => {
+  return await RefreshToken.update(
+    {
+      revoked_at: new Date(),
+    },
+    {
+      where: {
+        user_id: userId,
+        revoked_at: null,
+        replaced_by_id: null,
+      },
+      transaction,
+    }
+  );
+};
 
 module.exports = {
   findUserByEmail,
@@ -184,5 +199,6 @@ module.exports = {
   updateRefreshToken,
   findUserById,
   findUserProfileById,
-  findUserSessions
+  findUserSessions,
+  revokeAllUserSessions
 };
