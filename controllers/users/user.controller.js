@@ -765,6 +765,20 @@ const updateMyProfile = asyncHandler(async (req, res) => {
 });
 
 
+const getMySessions = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+
+  const sessions = await userManager.findUserSessions(userId);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      sessions,
+    },
+  });
+});
+
+
 module.exports = {
   register,
   verifyEmail,
@@ -777,5 +791,5 @@ module.exports = {
   getMyProfile,
   getCurrentUser,
   updateMyProfile,
-
+  getMySessions
 };

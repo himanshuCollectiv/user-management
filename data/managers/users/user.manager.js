@@ -52,7 +52,9 @@ const createUserToken = async (tokenData, transaction) => {
   });
 
 
-};const findUserToken = async (tokenHash, tokenType, transaction) => {
+};
+
+const findUserToken = async (tokenHash, tokenType, transaction) => {
   return await UserToken.findOne({
     where: {
       token_hash: tokenHash,
@@ -148,6 +150,23 @@ const findUserProfileById = async (userId) => {
 };
 
 
+const findUserSessions = async (userId) => {
+  return await RefreshToken.findAll({
+    where: {
+      user_id: userId,
+      revoked_at: null,
+      replaced_by_id: null,
+    },
+    attributes: [
+      "family_id",
+      "created_at",
+      "expires_at",
+    ],
+    order: [["created_at", "DESC"]],
+  });
+};
+
+
 module.exports = {
   findUserByEmail,
   createUser,
@@ -162,5 +181,6 @@ module.exports = {
   findCurrentRefreshToken,
   updateRefreshToken,
   findUserById,
-  findUserProfileById
+  findUserProfileById,
+  findUserSessions
 };
