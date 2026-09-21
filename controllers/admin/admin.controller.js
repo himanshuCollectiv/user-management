@@ -7,6 +7,8 @@ const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 const { hashPassword } = require("../../utils/password.util");
 
+
+//create-user-byAdmin
 const createUser = asyncHandler(async (req, res) => {
   const {
     name,
@@ -112,6 +114,8 @@ const createUser = asyncHandler(async (req, res) => {
 });
 
 
+
+//getUser
 const getUsers = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -152,7 +156,29 @@ const getUsers = asyncHandler(async (req, res) => {
   });
 });
 
+
+
+//get-user-detail
+const getUserDetails = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const user = await adminManager.findUserDetails(id);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      user,
+    },
+  });
+});
+
+
 module.exports = {
   createUser,
-  getUsers
+  getUsers,
+  getUserDetails
 };

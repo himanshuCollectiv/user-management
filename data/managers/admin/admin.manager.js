@@ -138,10 +138,45 @@ const findAllUsers = async ({
   });
 };
 
+const findUserDetails = async (userId) => {
+  return await User.findByPk(userId, {
+    attributes: [
+      "id",
+      "name",
+      "email",
+      "role",
+      "is_email_verified",
+      "is_active",
+      "can_edit_profile",
+      "last_seen_at",
+    ],
+    include: [
+      {
+        model: Department,
+        as: "department",
+        attributes: ["id", "name"],
+      },
+      {
+        model: Designation,
+        as: "designation",
+        attributes: ["id", "name"],
+      },
+      {
+        model: Location,
+        as: "location",
+        attributes: ["id", "state", "city"],
+      },
+    ],
+  });
+};
+
+
+
 module.exports = {
   findDepartmentByName,
   findDesignationByName,
   createDepartment,
   createDesignation,
-  findAllUsers
+  findAllUsers,
+  findUserDetails
 };
