@@ -7,9 +7,6 @@ const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 const { hashPassword } = require("../../utils/password.util");
 
-
-
-//create-user
 const createUser = asyncHandler(async (req, res) => {
   const {
     name,
@@ -31,27 +28,29 @@ const createUser = asyncHandler(async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const departmentRecord =
-      await adminManager.findDepartmentByName(
+    let departmentRecord = await adminManager.findDepartmentByName(
+      department,
+      transaction
+    );
+
+    if (!departmentRecord) {
+      departmentRecord = await adminManager.createDepartment(
         department,
         transaction
       );
-
-    if (!departmentRecord) {
-      throw new ApiError(404, "Department not found");
     }
 
-    const designationRecord =
-      await adminManager.findDesignationByName(
+    let designationRecord = await adminManager.findDesignationByName(
+      designation,
+      departmentRecord.id,
+      transaction
+    );
+
+    if (!designationRecord) {
+      designationRecord = await adminManager.createDesignation(
         designation,
         departmentRecord.id,
         transaction
-      );
-
-    if (!designationRecord) {
-      throw new ApiError(
-        404,
-        "Designation not found for the selected department"
       );
     }
 
@@ -112,6 +111,48 @@ const createUser = asyncHandler(async (req, res) => {
   }
 });
 
+
+const getUsers = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+
+  const {
+    search,
+    state,
+    city,
+    department,
+    designation,
+  } = req.query;
+
+  if (page < 1 || limit < 1) {
+    throw new ApiError(400, "Page and limit must be greater than 0");
+  }
+
+  const result = await adminManager.findAllUsers({
+    page,
+    limit,
+    search,
+    state,
+    city,
+    department,
+    designation,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      users: result.rows,
+      pagination: {
+        currentPage: page,
+        limit,
+        totalUsers: result.count,
+        totalPages: Math.ceil(result.count / limit),
+      },
+    },
+  });
+});
+
 module.exports = {
   createUser,
+  getUsers
 };

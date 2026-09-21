@@ -376,6 +376,10 @@ const refreshToken = asyncHandler(async (req, res) => {
   // 8. Hash new refresh token
   const newRefreshTokenHash = hashToken(newRefreshToken);
 
+  const newExpiresAt = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  );
+
   // 9. Generate new token ID/family stays same
   const newRefreshTokenRecord = await userManager.createRefreshToken({
     user_id: userId,
@@ -396,9 +400,15 @@ const refreshToken = asyncHandler(async (req, res) => {
   );
 
   // 11. Generate new access token
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(401, "User not found");
+  }
+
   const newAccessToken = generateAccessToken({
-    userId: userId,
-    role: decoded.role,
+    userId: user.id,
+    role: user.role,
   });
 
   // 12. Update access token cookie
