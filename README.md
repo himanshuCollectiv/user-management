@@ -1,8 +1,8 @@
 # User Management System (UMS)
 
-A secure and modular **User Management System** built with **Node.js, Express.js, PostgreSQL, Sequelize, JWT, and Nodemailer**.
+A secure and modular **User Management System (UMS)** built with **Node.js, Express.js, PostgreSQL (Neon), Sequelize, JWT, and Nodemailer**.
 
-The system supports user authentication, email verification, password management, profile management, session management, role-based admin access, user search/filtering, account activation/deactivation, and scheduled cleanup jobs.
+The system provides authentication, email verification, password management, profile management, session management, role-based admin access, user search/filtering, account activation/deactivation, profile-edit permissions, audit logging, presence tracking, read-only master-data APIs, and scheduled cleanup jobs.
 
 ---
 
@@ -19,8 +19,11 @@ The system supports user authentication, email verification, password management
 - [Email Verification](#email-verification)
 - [Password Management](#password-management)
 - [User Profile Management](#user-profile-management)
+- [Presence and Heartbeat](#presence-and-heartbeat)
 - [Session Management](#session-management)
 - [Admin User Management](#admin-user-management)
+- [Profile Edit Permission](#profile-edit-permission)
+- [Audit Logs](#audit-logs)
 - [Master Data Fetch APIs](#master-data-fetch-apis)
 - [Validation and Error Handling](#validation-and-error-handling)
 - [Scheduled Cleanup Jobs](#scheduled-cleanup-jobs)
@@ -32,14 +35,15 @@ The system supports user authentication, email verification, password management
 - [Admin Seeder](#admin-seeder)
 - [API Testing](#api-testing)
 - [Project Scope](#project-scope)
+- [System Flow](#system-flow)
 
 ---
 
 ## Project Overview
 
-The **User Management System (UMS)** provides a backend API for managing users and administrators.
+UMS provides REST APIs for managing normal users and administrators.
 
-The application supports two roles:
+Supported roles:
 
 - `user`
 - `admin`
@@ -50,13 +54,18 @@ The application supports two roles:
 - Email verification
 - Login and logout
 - JWT authentication
-- Access token and refresh token
-- Refresh token rotation
-- Refresh token family/session tracking
+- Short-lived access tokens
+- Refresh tokens
+- Refresh Token Rotation
+- Refresh-token family/session tracking
+- HTTP-only cookie based token handling
 - Password reset through email
 - Change password
+- Current-user (`me`) endpoint
 - User profile management
-- User session management
+- Profile edit permission control
+- Session management
+- Heartbeat/presence tracking
 - Admin user creation
 - Admin user listing
 - Search and filtering
@@ -65,8 +74,9 @@ The application supports two roles:
 - Admin user update
 - Account activation/deactivation
 - User deletion
+- Audit logging
 - Department/designation/location handling
-- Read-only master data APIs
+- Read-only master-data GET APIs
 - Centralized error handling
 - Request validation
 - Scheduled cleanup jobs
@@ -82,7 +92,7 @@ The application supports two roles:
 | Express.js | REST API framework |
 | PostgreSQL | Relational database |
 | Neon PostgreSQL | Cloud PostgreSQL |
-| Sequelize | ORM |
+| Sequelize | ORM/database access |
 | JWT | Authentication |
 | bcrypt | Password hashing |
 | Nodemailer | Email sending |
@@ -91,7 +101,6 @@ The application supports two roles:
 | cookie-parser | Cookie handling |
 | Morgan | HTTP request logging |
 | node-cron | Scheduled cleanup |
-| dotenv | Environment configuration |
 
 ---
 
@@ -166,9 +175,9 @@ Sample Folder Structure/
 
 ---
 
-## Architecture
+# Architecture
 
-The application follows a modular layered architecture.
+The application follows:
 
 ```text
 Client
@@ -188,44 +197,64 @@ Sequelize Model
 PostgreSQL
 ```
 
-### Responsibilities
+### Layer Responsibilities
 
 **Routes**
+
 - Define API endpoints.
-- Attach authentication, authorization and validation middleware.
+- Attach authentication, authorization, and validation middleware.
+- Keep User and Admin APIs separated.
 
 **Middleware**
+
 - Authentication
 - Admin authorization
 - Request validation
 - Centralized error handling
 
 **Controllers**
-- Handle HTTP request and response.
+
+- Handle HTTP requests and responses.
 - Coordinate application flow.
 - Handle transactions where required.
 
 **Managers**
+
 - Perform database operations.
 - Keep database access separate from controllers.
+- Contain database-related application logic.
 
 **Models**
-- Define Sequelize models and database relationships.
+
+- Define Sequelize models.
+- Define database relationships.
+- Represent PostgreSQL tables.
 
 **Services**
-- Handle external/business services such as email.
+
+There is no general-purpose business service layer.
+
+The service layer is used for external integration:
+
+```text
+services/email.service.js
+```
+
+for Nodemailer + Google OAuth2.
 
 **Utilities**
-- Reusable helpers for JWT, passwords, token hashing, errors and string normalization.
+
+Reusable helpers for JWT, passwords, token hashing, errors, and string normalization.
 
 **Jobs**
-- Run scheduled cleanup tasks.
+
+Scheduled cleanup operations.
 
 ---
 
-## Roles and Permissions
+# Roles and Permissions
 
-### User
+## User
 
 A normal user can:
 
@@ -234,16 +263,18 @@ A normal user can:
 - Login
 - Logout
 - Refresh session
+- Get current authentication information
 - View own profile
-- Update own profile
+- Update own profile when permitted
 - View own sessions
 - Revoke own sessions
 - Change password
 - Reset password
+- Send heartbeat/presence information
 
-### Admin
+## Admin
 
-An admin can perform all required administrative user-management operations:
+An admin can:
 
 - Create users
 - Create admin accounts
@@ -253,13 +284,15 @@ An admin can perform all required administrative user-management operations:
 - Paginate users
 - View user details
 - Update other users
+- Update profile-edit permission
 - Activate users
 - Deactivate users
 - Delete users
+- View audit information
 
 An admin cannot:
 
-- Edit their own account through the Admin Update API
+- Update their own account through the Admin Update API
 - Activate/deactivate their own account through the Admin activation APIs
 - Delete their own account
 
@@ -267,7 +300,7 @@ An admin cannot:
 
 # Database Design
 
-The main database tables are:
+Main tables:
 
 ```text
 ums_users
@@ -277,6 +310,8 @@ ums_locations
 ums_refresh_tokens
 ums_user_tokens
 ```
+
+An audit-log table is also used for recording relevant administrative/user-management actions.
 
 ---
 
@@ -302,8 +337,14 @@ Important fields:
 | `location_id` | Location reference |
 | `is_email_verified` | Email verification status |
 | `is_active` | Account status |
-| `can_edit_profile` | Profile editing permission |
-| `last_seen_at` | Last seen timestamp |
+| `can_edit_profile` | Controls whether the user can edit profile information |
+| `last_seen_at` | Last heartbeat/last-seen timestamp |
+
+### Presence
+
+`is_online` is **not stored as a database column**.
+
+It is derived from `last_seen_at`.
 
 ---
 
@@ -315,17 +356,7 @@ Table:
 ums_departments
 ```
 
-Stores department names.
-
-Example:
-
-```text
-Engineering
-Human Resources
-Finance
-```
-
-Department names are normalized before database operations.
+Stores normalized department names.
 
 ---
 
@@ -338,8 +369,6 @@ ums_designations
 ```
 
 A designation belongs to a department.
-
-Relationship:
 
 ```text
 Department
@@ -379,7 +408,7 @@ A unique composite index exists on:
 state + city
 ```
 
-Therefore the same state/city combination is reused instead of creating duplicate logical locations.
+This prevents duplicate logical locations.
 
 ---
 
@@ -406,9 +435,21 @@ ip_address
 created_at
 ```
 
+The refresh-token table is also used as the persistent session store.
+
 The raw refresh token is never stored in the database.
 
 Only its hash is stored.
+
+### Token Relationships
+
+```text
+RT1 → RT2 → RT3
+```
+
+`replaced_by_id` tracks the next token in a rotation chain.
+
+`family_id` groups refresh tokens belonging to the same login/session family.
 
 ---
 
@@ -420,7 +461,7 @@ Table:
 ums_user_tokens
 ```
 
-Used for:
+Used for temporary token workflows:
 
 ```text
 email_verification
@@ -428,6 +469,16 @@ password_reset
 ```
 
 Only hashed temporary tokens are stored.
+
+---
+
+## Audit Logs
+
+Audit logs record relevant actions performed through the system.
+
+The audit trail is intended to provide traceability for administrative/user-management operations.
+
+Typical audit information includes the actor/user performing the action, the action being performed, the affected resource/user, and request/context information where applicable.
 
 ---
 
@@ -447,7 +498,7 @@ User
  └── hasMany → UserToken
 ```
 
-Related token records are configured with cascade behavior for user deletion.
+Related token records use cascade behavior where configured.
 
 ---
 
@@ -460,58 +511,202 @@ Two tokens are used:
 - Access Token
 - Refresh Token
 
-### Access Token
+## Access Token
 
 - Short-lived
-- Used for protected API requests
-- Lifetime: 15 minutes
+- Used for protected APIs
+- Lifetime: `15 minutes`
 
-### Refresh Token
+## Refresh Token
 
 - Long-lived
-- Used to generate a new access token
-- Lifetime: 7 days
-- Stored as an HTTP-only cookie
+- Used to obtain a new access token
+- Lifetime: `7 days`
+- Stored in an HTTP-only cookie
 - Hashed before database storage
 
-### Authentication Cookies
+### Cookies
 
 ```text
 accessToken
 refreshToken
 ```
 
-Cookies are configured as HTTP-only and are secure in production.
+Cookies are configured as HTTP-only and secure in production.
 
 ---
 
-## Authentication Flow
+# Authentication APIs
+
+## Register
 
 ```text
-Login
+POST /api/v1/auth/users/register
+```
+
+Registration creates a normal user and initiates email verification.
+
+Flow:
+
+```text
+Register
   ↓
-Validate credentials
+Validate input
   ↓
-Check email verification
+Find/Create Location
   ↓
-Check account status
+Hash Password
   ↓
-Generate access token
+Create or update unverified user
   ↓
-Generate refresh token
+Generate verification token
+  ↓
+Hash token
+  ↓
+Store token
+  ↓
+Commit transaction
+  ↓
+Send verification email
+```
+
+If an existing user has the same email but is still unverified, the registration information is updated and a new verification token is generated instead of creating a duplicate account.
+
+---
+
+## Login
+
+```text
+POST /api/v1/auth/users/login
+```
+
+Login checks:
+
+1. Credentials
+2. Email verification
+3. Account active status
+
+Successful login:
+
+```text
+Credentials
+  ↓
+Validate user
+  ↓
+Generate Access Token
+  ↓
+Generate Refresh Token
+  ↓
+Create refresh-token family
   ↓
 Hash refresh token
   ↓
-Store refresh token in DB
+Store session
   ↓
 Set HTTP-only cookies
 ```
 
 ---
 
-# Refresh Token Rotation
+## Current User / Me
 
-Refresh Token Rotation is implemented to reduce the risk of reuse of old refresh tokens.
+```text
+GET /api/v1/auth/users/me
+```
+
+Returns current authentication information such as:
+
+```text
+userId
+role
+isLoggedIn
+```
+
+---
+
+## Verify Email
+
+```text
+POST /api/v1/auth/users/verify-email
+```
+
+Flow:
+
+```text
+Received Token
+  ↓
+Hash Token
+  ↓
+Find Stored Token
+  ↓
+Check Type
+  ↓
+Check Expiry
+  ↓
+Mark Email Verified
+  ↓
+Delete Used Token
+```
+
+---
+
+## Refresh Token
+
+```text
+POST /api/v1/auth/users/refresh
+```
+
+The refresh flow uses the HTTP-only refresh-token cookie and the session family information.
+
+Flow:
+
+```text
+Read refreshToken cookie
+  ↓
+Verify refresh token
+  ↓
+Find stored token record
+  ↓
+Hash supplied token
+  ↓
+Compare stored hash
+  ↓
+Validate token/session state
+  ↓
+Revoke old token
+  ↓
+Create replacement token
+  ↓
+Set replacement mapping
+  ↓
+Generate new Access Token
+  ↓
+Generate new Refresh Token
+  ↓
+Set new cookies
+```
+
+Refresh Token Rotation prevents an already-used refresh token from remaining the active token.
+
+---
+
+## Logout
+
+```text
+POST /api/v1/auth/users/logout
+```
+
+Logout:
+
+- Revokes the current refresh-token session.
+- Clears `accessToken`.
+- Clears `refreshToken`.
+
+Cookies are cleared even when the refresh token is already invalid.
+
+---
+
+# Refresh Token Rotation
 
 Example:
 
@@ -519,37 +714,35 @@ Example:
 RT1 → RT2 → RT3
 ```
 
-When RT1 is refreshed:
+When `RT1` is refreshed:
 
 ```text
 RT1
-revoked_at = timestamp
-replaced_by_id = RT2
+  revoked_at = timestamp
+  replaced_by_id = RT2
 
 RT2
-revoked_at = NULL
-replaced_by_id = NULL
+  revoked_at = NULL
 ```
 
-When RT2 is refreshed:
+When `RT2` is refreshed:
 
 ```text
 RT2
-revoked_at = timestamp
-replaced_by_id = RT3
+  revoked_at = timestamp
+  replaced_by_id = RT3
 
 RT3
-revoked_at = NULL
-replaced_by_id = NULL
+  revoked_at = NULL
 ```
 
-Only the current refresh token remains active.
+Only the current token in a session family remains active.
 
 ---
 
-# Refresh Token Family
+# Refresh Token Family and Sessions
 
-Every new login creates a unique `family_id`.
+Every login creates a unique `family_id`.
 
 Example:
 
@@ -559,52 +752,18 @@ User
  └── Mobile Session → Family B
 ```
 
-This allows sessions to be managed independently.
-
----
-
-# Device and IP Tracking
-
-Each refresh-token record stores:
-
-- `device_info`
-- `ip_address`
-
-Device information is taken from the request User-Agent.
-
-This information is returned by the session API.
-
----
-
-# Password Security
-
-Passwords are never stored in plain text.
-
-The project uses:
+Each session record can contain:
 
 ```text
-bcrypt
+family_id
+device_info
+ip_address
+created_at
+expires_at
+revoked_at
 ```
 
-with a salt round of:
-
-```text
-12
-```
-
-Flow:
-
-```text
-Plain Password
-     ↓
-bcrypt
-     ↓
-password_hash
-     ↓
-Database
-```
-
-During login, `bcrypt.compare()` is used.
+This allows individual login sessions to be managed independently.
 
 ---
 
@@ -612,71 +771,21 @@ During login, `bcrypt.compare()` is used.
 
 Normal user registration requires email verification.
 
-Flow:
+Verification tokens:
 
-```text
-Register
-  ↓
-Create User
-  ↓
-is_email_verified = false
-  ↓
-Generate verification token
-  ↓
-Hash token
-  ↓
-Store hash
-  ↓
-Send raw token by email
-```
+- Are hashed before storage.
+- Expire after 24 hours.
+- Are deleted after successful verification.
 
-Verification tokens expire after 24 hours.
+If an existing user is unverified, another registration attempt can update the registration data and issue a fresh verification token.
 
-After successful verification:
-
-```text
-is_email_verified = true
-```
-
-The used verification token is deleted.
+A separate resend-verification API is not part of the current API surface.
 
 ---
 
-# Existing Unverified User
-
-If registration is attempted with an existing but unverified email:
-
-```text
-Existing User
-  ↓
-Update registration information
-  ↓
-Generate new verification token
-  ↓
-Send verification email again
-```
-
-A duplicate user account is not created.
-
----
-
-# Login Restrictions
-
-Login is rejected when:
-
-- Email/password is incorrect
-- Email is not verified
-- Account is deactivated
-
-Invalid credentials use a generic authentication error instead of exposing unnecessary account information.
-
----
-
-# Password Reset
+# Password Management
 
 ## Forgot Password
-
-Endpoint:
 
 ```text
 POST /api/v1/auth/users/forgot-password
@@ -698,19 +807,11 @@ Store token
 Send reset email
 ```
 
-The response is enumeration-safe:
+The response is enumeration-safe.
 
-```text
-If the email exists, a password reset link has been sent.
-```
-
-Password reset tokens expire after 24 hours.
-
----
+Reset tokens expire after 24 hours.
 
 ## Reset Password
-
-Endpoint:
 
 ```text
 POST /api/v1/auth/users/reset-password
@@ -720,40 +821,36 @@ Flow:
 
 ```text
 Received Token
- ↓
+  ↓
 Hash Token
- ↓
+  ↓
 Find Stored Token
- ↓
+  ↓
 Check Type
- ↓
+  ↓
 Check Expiry
- ↓
+  ↓
 Hash New Password
- ↓
+  ↓
 Update User
- ↓
+  ↓
 Delete Used Token
 ```
 
----
-
-# Change Password
-
-Endpoint:
+## Change Password
 
 ```text
 POST /api/v1/auth/users/change-password
 ```
 
-The authenticated user supplies:
+Request:
 
 ```text
 currentPassword
 newPassword
 ```
 
-The system:
+Flow:
 
 ```text
 Verify current password
@@ -766,22 +863,6 @@ Update password
 ---
 
 # User Profile Management
-
-## Get Current User
-
-```text
-GET /api/v1/auth/users/me
-```
-
-Returns basic authentication information such as:
-
-```text
-userId
-role
-isLoggedIn
-```
-
----
 
 ## Get Profile
 
@@ -819,49 +900,51 @@ city
 
 State and city must be supplied together when changing location.
 
-If the location already exists, it is reused.
+If a matching location exists, it is reused. Otherwise, a new location is created.
 
-Otherwise a new location is created.
+### Profile Permission
+
+Profile editing is controlled by:
+
+```text
+can_edit_profile
+```
+
+When profile editing is restricted for a user, the user cannot use the profile update functionality that is controlled by this permission.
 
 ---
 
-# Text Normalization
+# Presence and Heartbeat
 
-Department, designation, state and city values are normalized before find/create/update operations.
-
-Example:
+## Heartbeat
 
 ```text
-uttarakhand
-UTTARAKHAND
-uTtArAkHaNd
+PATCH /api/v1/auth/users/heartbeat
 ```
 
-all become:
+The heartbeat endpoint updates:
 
 ```text
-Uttarakhand
+last_seen_at
 ```
 
-Multiple spaces are also reduced to a single space.
+for the authenticated user.
 
-This prevents casing-based duplicate logical values.
+The field is used as the source for presence calculation.
 
-Example:
+---
+
+## Presence
 
 ```text
-"human resources"
-"HUMAN RESOURCES"
-"Human Resources"
+GET /api/v1/auth/users/presence
 ```
 
-all map to:
+Presence is derived from the user's `last_seen_at`.
 
-```text
-Human Resources
-```
+`is_online` is not persisted as a database column.
 
-The same normalized value is used when searching for an existing record before creating a new one.
+The application determines online status from the most recent heartbeat/last-seen timestamp.
 
 ---
 
@@ -873,7 +956,7 @@ The same normalized value is used when searching for an existing record before c
 GET /api/v1/auth/users/sessions
 ```
 
-Returns active sessions containing:
+Returns active session information:
 
 ```text
 family_id
@@ -882,8 +965,6 @@ ip_address
 created_at
 expires_at
 ```
-
----
 
 ## Revoke Session
 
@@ -897,43 +978,29 @@ The session is revoked by setting:
 revoked_at
 ```
 
-The row is not immediately physically deleted.
+The record is not immediately physically deleted.
 
----
-
-# Logout
-
-```text
-POST /api/v1/auth/users/logout
-```
-
-Logout:
-
-- Revokes the current refresh-token session
-- Clears `accessToken`
-- Clears `refreshToken`
-
-If the refresh token is already invalid, cookies are still cleared.
+> A separate `logout-all` API is not part of the implemented API scope.
 
 ---
 
 # Admin Module
 
-Admin APIs are separated from User APIs.
+Admin APIs are separate from User APIs.
 
 Admin routes use:
 
 ```text
 authMiddleware
-    ↓
+      ↓
 adminMiddleware
-    ↓
+      ↓
 Admin Controller
 ```
 
-The first middleware verifies authentication.
+`authMiddleware` verifies authentication.
 
-The second verifies:
+`adminMiddleware` verifies:
 
 ```text
 req.user.role === "admin"
@@ -941,15 +1008,15 @@ req.user.role === "admin"
 
 ---
 
-# First Admin
+# First Admin / Seeder
 
-The first admin is created using:
+The first admin is created through:
 
 ```text
 seeders/admin.seed.js
 ```
 
-The seed uses:
+Environment variables:
 
 ```text
 ADMIN_NAME
@@ -957,7 +1024,7 @@ ADMIN_EMAIL
 ADMIN_PASSWORD
 ```
 
-The seeded admin is:
+The seeded account has:
 
 ```text
 role = admin
@@ -965,9 +1032,17 @@ is_email_verified = true
 is_active = true
 ```
 
+Run:
+
+```bash
+npm run seed:admin
+```
+
 ---
 
-# Admin Create User
+# Admin User Management
+
+## Create User / Admin
 
 ```text
 POST /api/v1/admin/users
@@ -978,7 +1053,7 @@ Admin can create:
 - User accounts
 - Admin accounts
 
-Request fields:
+Example:
 
 ```json
 {
@@ -997,7 +1072,7 @@ Admin-created accounts are immediately email verified.
 
 ---
 
-# Admin List Users
+## List / Search / Filter Users
 
 ```text
 GET /api/v1/admin/users
@@ -1021,14 +1096,14 @@ Example:
 GET /api/v1/admin/users?search=john&department=Engineering&state=Uttarakhand&page=1&limit=10
 ```
 
-Search is supported on:
+Search supports:
 
 ```text
 name
 email
 ```
 
-Pagination is implemented using:
+Pagination uses:
 
 ```text
 page
@@ -1038,14 +1113,15 @@ offset
 
 ---
 
-# Admin Get User Details
+## Get User Details
 
 ```text
 GET /api/v1/admin/users/:id
 ```
 
-Returns user details along with:
+Returns:
 
+- User details
 - Department
 - Designation
 - Location
@@ -1056,7 +1132,7 @@ Returns user details along with:
 
 ---
 
-# Admin Update User
+## Update User
 
 ```text
 PATCH /api/v1/admin/users/:id
@@ -1075,7 +1151,7 @@ state
 city
 ```
 
-Related department/designation/location records are found or created as required.
+Related master-data records are found or created as required.
 
 The operation uses a database transaction.
 
@@ -1083,13 +1159,29 @@ An admin cannot update their own account through this endpoint.
 
 ---
 
-# Admin Deactivate User
+## Update Profile Permission
+
+The Admin module also supports controlling whether a user can edit their own profile.
+
+The permission is stored in:
+
+```text
+users.can_edit_profile
+```
+
+This allows an administrator to restrict or allow profile editing for individual users.
+
+The permission is enforced by the profile-update flow.
+
+---
+
+## Deactivate User
 
 ```text
 PATCH /api/v1/admin/users/:id/deactivate
 ```
 
-The API:
+Changes:
 
 ```text
 is_active = false
@@ -1101,23 +1193,23 @@ An admin cannot deactivate themselves.
 
 ---
 
-# Admin Activate User
+## Activate User
 
 ```text
 PATCH /api/v1/admin/users/:id/activate
 ```
 
-The API changes:
+Changes:
 
 ```text
 is_active = true
 ```
 
-An admin cannot activate their own account through this endpoint.
+An admin cannot activate themselves through this endpoint.
 
 ---
 
-# Admin Delete User
+## Delete User
 
 ```text
 DELETE /api/v1/admin/users/:id
@@ -1125,15 +1217,34 @@ DELETE /api/v1/admin/users/:id
 
 An admin cannot delete themselves.
 
-Deleting a user also removes related records through configured cascade relationships.
+Configured cascade relationships remove related records when a user is deleted.
+
+---
+
+# Audit Logs
+
+Audit logging provides traceability for important user-management and administrative actions.
+
+The audit trail can be used to determine:
+
+```text
+who performed an action
+what action was performed
+which user/resource was affected
+when the action occurred
+```
+
+Audit logs are intended to provide an immutable historical record rather than replacing normal application logs.
+
+Administrative operations such as user management and permission changes can be represented in the audit trail.
 
 ---
 
 # Master Data Fetch APIs
 
-Standalone Master Data CRUD is outside the assignment scope.
+Standalone Master Data CRUD is **excluded from the assignment scope**.
 
-However, read-only APIs are available for frontend dropdowns and filtering.
+Read-only APIs are available for frontend dropdowns and filtering.
 
 ## Departments
 
@@ -1141,19 +1252,11 @@ However, read-only APIs are available for frontend dropdowns and filtering.
 GET /api/v1/admin/departments
 ```
 
-Returns all departments.
-
----
-
 ## Designations
 
 ```text
 GET /api/v1/admin/designations?departmentId=1
 ```
-
-Returns designations belonging to the selected department.
-
----
 
 ## States
 
@@ -1161,19 +1264,49 @@ Returns designations belonging to the selected department.
 GET /api/v1/admin/states
 ```
 
-Returns unique states.
-
----
-
 ## Cities
 
 ```text
 GET /api/v1/admin/cities?state=Uttarakhand
 ```
 
-Returns cities belonging to the selected state.
+State, city, department, and designation values are normalized before relevant database operations.
 
-State input is normalized before querying so different casing can still resolve the same state.
+---
+
+# Text Normalization
+
+Examples:
+
+```text
+uttarakhand
+UTTARAKHAND
+uTtArAkHaNd
+```
+
+normalize to:
+
+```text
+Uttarakhand
+```
+
+Multiple spaces are reduced to a single space.
+
+Example:
+
+```text
+"human resources"
+"HUMAN RESOURCES"
+"Human Resources"
+```
+
+normalize to:
+
+```text
+Human Resources
+```
+
+This prevents casing/spacing-based duplicate logical records.
 
 ---
 
@@ -1197,7 +1330,7 @@ Create/Update User
 COMMIT
 ```
 
-If an operation fails:
+On failure:
 
 ```text
 ROLLBACK
@@ -1207,9 +1340,26 @@ This prevents partially completed multi-table operations.
 
 ---
 
-# Centralized Error Handling
+# Validation and Error Handling
 
-The application uses:
+Request validation uses:
+
+```text
+express-validator
+```
+
+Validation covers:
+
+- Required fields
+- Email format
+- Password requirements
+- Role values
+- State/city requirements
+- Department/designation requirements
+
+Validation runs before controller execution.
+
+Centralized error handling uses:
 
 ```text
 utils/ApiError.js
@@ -1223,7 +1373,7 @@ Example:
 throw new ApiError(404, "User not found");
 ```
 
-The centralized middleware returns:
+Standard error response:
 
 ```json
 {
@@ -1232,23 +1382,6 @@ The centralized middleware returns:
   "errors": []
 }
 ```
-
----
-
-# Request Validation
-
-`express-validator` is used for validating request data.
-
-Examples:
-
-- Valid email format
-- Required fields
-- Minimum password length
-- Valid role
-- State/city requirements
-- Department/designation requirements
-
-Validation is performed before controller execution.
 
 ---
 
@@ -1262,7 +1395,7 @@ Cleanup runs hourly:
 0 * * * *
 ```
 
-The following cleanup jobs run:
+Jobs include:
 
 ### Unverified Users
 
@@ -1270,7 +1403,7 @@ Removes users that remain unverified beyond the allowed period.
 
 ### Expired Refresh Tokens
 
-Deletes refresh-token records where:
+Deletes records where:
 
 ```text
 expires_at < current time
@@ -1294,13 +1427,13 @@ Email functionality is centralized in:
 services/email.service.js
 ```
 
-The service uses:
+Technology:
 
 ```text
 Nodemailer + Google OAuth2
 ```
 
-Supported email workflows:
+Supported workflows:
 
 ```text
 Verification Email
@@ -1308,7 +1441,7 @@ Password Reset Email
 Generic Email
 ```
 
-Email templates are maintained separately under:
+Templates are stored under:
 
 ```text
 templates/emails/
@@ -1318,44 +1451,50 @@ templates/emails/
 
 # Security
 
-The application implements the following security measures:
-
-### Password Protection
+## Password Security
 
 - bcrypt hashing
-- Passwords are never stored in plain text
+- Salt rounds: `12`
+- Plain-text passwords are never stored
 
-### Token Protection
+## Token Security
 
-- Temporary tokens are hashed
 - Refresh tokens are hashed
+- Temporary tokens are hashed
 - Refresh Token Rotation is implemented
+- Token expiry is enforced
+- Replaced refresh tokens are revoked
 
-### Authentication
+## Authentication
 
 - Short-lived access tokens
-- Refresh tokens
+- Long-lived refresh tokens
 - HTTP-only cookies
 
-### Authorization
+## Authorization
 
 - Authentication middleware
 - Admin role middleware
+- Profile-edit permission checks
 
-### Account Security
+## Account Security
 
 - Email verification
 - Account activation/deactivation
 - Session revocation
 
-### Information Disclosure
+## Information Disclosure
 
-- Generic invalid credential response
+- Generic invalid-credential response
 - Enumeration-safe forgot-password response
+
+## Auditability
+
+- Audit logs for relevant administrative/user-management actions
 
 ---
 
-# API Documentation
+# Complete API Reference
 
 ## Authentication APIs
 
@@ -1363,26 +1502,24 @@ The application implements the following security measures:
 |---|---|---|
 | POST | `/api/v1/auth/users/register` | Register user |
 | POST | `/api/v1/auth/users/login` | Login |
+| GET | `/api/v1/auth/users/me` | Get current user/auth state |
 | POST | `/api/v1/auth/users/verify-email` | Verify email |
-| POST | `/api/v1/auth/users/refresh` | Refresh tokens |
-| POST | `/api/v1/auth/users/logout` | Logout |
+| POST | `/api/v1/auth/users/refresh` | Rotate refresh token and issue new tokens |
+| POST | `/api/v1/auth/users/logout` | Logout/revoke current session |
 | POST | `/api/v1/auth/users/forgot-password` | Request password reset |
 | POST | `/api/v1/auth/users/reset-password` | Reset password |
 | POST | `/api/v1/auth/users/change-password` | Change password |
-
----
 
 ## User APIs
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/api/v1/auth/users/me` | Get current user |
 | GET | `/api/v1/auth/users/profile` | Get own profile |
 | PATCH | `/api/v1/auth/users/profile` | Update own profile |
+| PATCH | `/api/v1/auth/users/heartbeat` | Update `last_seen_at` |
+| GET | `/api/v1/auth/users/presence` | Get derived online/presence state |
 | GET | `/api/v1/auth/users/sessions` | Get active sessions |
-| DELETE | `/api/v1/auth/users/sessions/:familyId` | Revoke session |
-
----
+| DELETE | `/api/v1/auth/users/sessions/:familyId` | Revoke a session |
 
 ## Admin APIs
 
@@ -1396,14 +1533,19 @@ The application implements the following security measures:
 | PATCH | `/api/v1/admin/users/:id/activate` | Activate user |
 | DELETE | `/api/v1/admin/users/:id` | Delete user |
 
----
+### Additional Admin Functionality
+
+- Update user profile-edit permission
+- Audit administrative/user-management actions
+
+> Exact endpoint names for the newly added profile-permission and audit-log APIs should match the route files in the current codebase. They are intentionally not guessed here.
 
 ## Master Data GET APIs
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/api/v1/admin/departments` | Get departments |
-| GET | `/api/v1/admin/designations?departmentId=1` | Get department designations |
+| GET | `/api/v1/admin/designations?departmentId=1` | Get designations |
 | GET | `/api/v1/admin/states` | Get states |
 | GET | `/api/v1/admin/cities?state=Uttarakhand` | Get cities |
 
@@ -1432,11 +1574,9 @@ Create:
 .env
 ```
 
-and add the required configuration.
+and configure the required variables.
 
-## 4. Start the Server
-
-Development:
+## 4. Start Development Server
 
 ```bash
 npm run dev
@@ -1447,8 +1587,6 @@ Production/start command depends on the scripts configured in `package.json`.
 ---
 
 # Environment Variables
-
-Create `.env` using the following structure:
 
 ```env
 PORT=5000
@@ -1475,19 +1613,19 @@ ADMIN_PASSWORD=your_admin_password
 NODE_ENV=development
 ```
 
-> Never commit `.env` to Git. Use `.env.example` for sharing the required variable names.
+> Never commit `.env` to Git. Use `.env.example` for sharing variable names.
 
 ---
 
 # Admin Seeder
 
-The first admin can be created using the seed script:
+Run:
 
 ```bash
 npm run seed:admin
 ```
 
-The seed uses:
+Required variables:
 
 ```env
 ADMIN_NAME=
@@ -1495,55 +1633,59 @@ ADMIN_EMAIL=
 ADMIN_PASSWORD=
 ```
 
-After successful seeding, the admin can log in and access protected Admin APIs.
+After successful seeding, the admin can access protected Admin APIs.
 
 ---
 
 # API Testing
 
-Recommended Admin testing flow:
+## Admin Flow
 
 ```text
 1. Run admin seed
 2. Login as admin
-3. Create user
+3. Create user/admin
 4. List users
 5. Search users
 6. Filter users
 7. Test pagination
 8. Get user details
 9. Update user
-10. Deactivate user
-11. Verify login is blocked
-12. Activate user
-13. Verify login works
-14. Delete user
-15. Verify deleted user returns 404
+10. Update profile-edit permission
+11. Deactivate user
+12. Verify login is blocked
+13. Activate user
+14. Verify login works
+15. Review audit information
+16. Delete user
+17. Verify deleted user returns 404
 ```
 
-Recommended User testing flow:
+## User/Auth Flow
 
 ```text
 1. Register
 2. Verify email
 3. Login
-4. Get current user
+4. Get current user (/me)
 5. Get profile
 6. Update profile
-7. Get sessions
-8. Revoke session
-9. Refresh token
-10. Change password
-11. Forgot password
-12. Reset password
-13. Logout
+7. Send heartbeat
+8. Check presence
+9. Get sessions
+10. Revoke session
+11. Refresh token
+12. Change password
+13. Forgot password
+14. Reset password
+15. Logout
 ```
 
 ---
 
-# Error Response Format
+# Response Format
 
-Successful response:
+## Success
 
 ```json
 {
@@ -1553,7 +1695,7 @@ Successful response:
 }
 ```
 
-Error response:
+## Error
 
 ```json
 {
@@ -1585,15 +1727,19 @@ Common status codes:
 - User registration
 - Email verification
 - Login
+- Current-user (`me`) API
 - Access tokens
 - Refresh tokens
-- Refresh token rotation
-- Refresh token family tracking
+- Refresh Token Rotation
+- Refresh Token Family tracking
 - Logout
 - Password reset
 - Change password
 - User profile
+- Profile-edit permission
 - Session management
+- Heartbeat
+- Presence
 - Admin user management
 - Search
 - Filtering
@@ -1601,8 +1747,9 @@ Common status codes:
 - Account activation
 - Account deactivation
 - User deletion
+- Audit logging
 - Department/designation/location handling
-- Master Data GET APIs
+- Read-only Master Data GET APIs
 - Centralized error handling
 - Request validation
 - Email integration
@@ -1612,8 +1759,6 @@ Common status codes:
 
 Standalone Master Data CRUD APIs are intentionally excluded.
 
-The following are not part of the API scope:
-
 ```text
 POST/PUT/PATCH/DELETE Department
 POST/PUT/PATCH/DELETE Designation
@@ -1621,6 +1766,14 @@ POST/PUT/PATCH/DELETE Location
 ```
 
 Master data is fetched through read-only APIs and created/reused internally where required by user-management workflows.
+
+The following are also **not implemented**:
+
+```text
+Logout All / Logout All Devices API
+```
+
+A dedicated resend-verification API is not part of the current API surface.
 
 ---
 
@@ -1639,12 +1792,12 @@ Master data is fetched through read-only APIs and created/reused internally wher
                     ┌─────────────┴─────────────┐
                     │                           │
                     ▼                           ▼
-             ┌──────────────┐           ┌──────────────┐
-             │ User Module  │           │ Admin Module │
-             └──────┬───────┘           └──────┬───────┘
+             ┌──────────────┐            ┌──────────────┐
+             │ User Module  │            │ Admin Module │
+             └──────┬───────┘            └──────┬───────┘
                     │                           │
-                    └────────────┬──────────────┘
-                                 ▼
+                    └─────────────┬─────────────┘
+                                  ▼
                          ┌─────────────────┐
                          │   Controllers   │
                          └────────┬────────┘
@@ -1662,6 +1815,7 @@ Master data is fetched through read-only APIs and created/reused internally wher
                          └─────────────────┘
 
 Email:
+
 Nodemailer → Google OAuth2 → Gmail
 ```
 
@@ -1669,22 +1823,22 @@ Nodemailer → Google OAuth2 → Gmail
 
 # Conclusion
 
-The User Management System is a modular backend application designed to provide secure user authentication and complete administrative user management.
+The User Management System is a modular backend application for secure authentication and administrative user management.
 
-The project separates:
+The architecture separates:
 
 ```text
 Routes
 Controllers
 Managers
 Models
-Services
 Middleware
+Services
 Utilities
 Jobs
 ```
 
-Security is implemented through:
+Security and reliability features include:
 
 ```text
 bcrypt
@@ -1694,10 +1848,12 @@ Refresh Token Rotation
 Token hashing
 Email verification
 Role-based authorization
+Profile-edit permissions
 Session revocation
+Presence tracking
 Account activation/deactivation
+Audit logging
 Centralized error handling
 ```
 
-The application is structured to remain maintainable and extensible while keeping User and Admin functionality separated.
-
+The User and Admin modules remain separated, database operations are handled through Managers, and external email integration is isolated in the dedicated email service.

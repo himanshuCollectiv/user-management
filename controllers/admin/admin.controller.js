@@ -686,7 +686,7 @@ const getCities = asyncHandler(async (req, res) => {
 });
 
 
-
+//userEditProfilePermisson
 const updateProfilePermission = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   const { canEditProfile } = req.body;
