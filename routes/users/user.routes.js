@@ -5,9 +5,11 @@ const validationMiddleware = require("../../middlewares/validation.middleware");
 
 const { registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation, changePasswordValidation, updateProfileValidation } = require("../../validations/users/user.validator");
 
-const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser, updateMyProfile, getMySessions, revokeSession, heartbeat, getMyPresence } = require("../../controllers/users/user.controller");
+const { register, verifyEmail, login, refreshToken, logout, forgotPassword, resetPassword, changePassword, getMyProfile, getCurrentUser, updateMyProfile, getMySessions, revokeSession, heartbeat, getMyPresence, updateProfileImage } = require("../../controllers/users/user.controller");
 
-const authMiddleware = require("../../middlewares/auth.middleware")
+const authMiddleware = require("../../middlewares/auth.middleware");
+const upload = require("../../middlewares/upload.middleware");
+
 
 
 //routes
@@ -40,5 +42,8 @@ router.delete("/sessions/:familyId", authMiddleware, revokeSession);
 router.patch("/heartbeat", authMiddleware, heartbeat );
 
 router.get( "/presence", authMiddleware, getMyPresence);
+
+router.patch( "/profile-image", authMiddleware, upload.single("profileImage"), updateProfileImage );
+
 
 module.exports = router;

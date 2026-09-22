@@ -6,9 +6,14 @@ const auditManager = require("../../data/managers/admin/audit.manager");
 
 const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
+const crypto = require("crypto");
 const { hashPassword } = require("../../utils/password.util");
 const { normalizeText } = require("../../utils/string.utils");
 const { addChange } = require("../../utils/audit.utils");
+const {
+  uploadToS3,
+  deleteFromS3,
+} = require("../../utils/s3.utils");
 
 //create-user-byAdmin
 const createUser = asyncHandler(async (req, res) => {
@@ -784,6 +789,51 @@ const getAuditLogs = async (req, res) => {
 
 
 
+//admin-user-profile
+const updateUserProfileImage = asyncHandler(async (req, res) => {
+  const targetUserId = req.params.id;
+
+  if (!req.file) {
+    throw new ApiError(400, "Profile image is required");
+  }
+
+  const user = await userManager.findUserById(targetUserId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const extension = req.file.originalname
+    .split(".")
+    .pop()
+    .toLowerCase();
+
+  const imageKey =
+    `users/${targetUserId}/profile/${crypto.randomUUID()}.${extension}`;
+
+  await uploadToS3({
+    key: imageKey,
+    buffer: req.file.buffer,
+    contentType: req.file.mimetype,
+  });
+
+  const oldImageKey = user.profile_image_key;
+
+  await userManager.updateProfileImage(targetUserId, imageKey);
+
+  if (oldImageKey) {
+    await deleteFromS3(oldImageKey);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "User profile image updated successfully",
+    data: {
+      profile_image_key: imageKey,
+    },
+  });
+});
+
 
 module.exports = {
   createUser,
@@ -798,5 +848,6 @@ module.exports = {
   getStates,
   getCities,
   getAuditLogs,
-  updateProfilePermission
+  updateProfilePermission,
+  updateUserProfileImage
 };

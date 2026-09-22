@@ -225,6 +225,20 @@ const findActiveUserSessions = async (userId) => {
   });
 };
 
+
+const updateProfileImage = async (userId, profileImageKey) => {
+  return await User.update(
+    {
+      profile_image_key: profileImageKey,
+    },
+    {
+      where: {
+        id: userId,
+      },
+    }
+  );
+};
+
 module.exports = {
   findUserByEmail,
   createUser,
@@ -243,5 +257,6 @@ module.exports = {
   findUserSessions,
   revokeAllUserSessions,
   updateSessionLastSeen,
-  findActiveUserSessions
+  findActiveUserSessions,
+  updateProfileImage
 };

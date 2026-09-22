@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const cors = require("cors");
 const cookieParser = require("cookie-parser")
 const morgan = require("morgan");
 const sequelize = require("./data/connection/connection");
@@ -20,6 +21,26 @@ const errorMiddleware = require("./middlewares/error.middleware")
 require("./jobs/cleanup.job");
 
 const app = express();
+
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  .split(",")
+  .map((origin) => origin.trim());
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+
 
 // Middleware
 app.use(express.json());

@@ -63,6 +63,10 @@ User.init(
             allowNull: false,
             defaultValue: true,
         },
+        profile_image_key: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
     },
     {
         sequelize,

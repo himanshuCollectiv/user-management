@@ -5,6 +5,7 @@ const asyncHandler = require("../../utils/asyncHandler");
 const ApiError = require("../../utils/ApiError");
 
 const { hashPassword, } = require("../../utils/password.util");
+const crypto = require("crypto");
 
 const { generateToken, hashToken } = require("../../utils/token.util");
 
@@ -20,7 +21,7 @@ const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
 
 const {normalizeText} = require("../../utils/string.utils")
 
-
+const { uploadToS3, deleteFromS3,} = require("../../utils/s3.utils");
 
 
 
@@ -928,6 +929,65 @@ const getMyPresence = asyncHandler(async (req, res) => {
 });
 
 
+
+//uploadprofileimage
+const updateProfileImage = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+
+  if (!req.file) {
+    throw new ApiError(400, "Profile image is required");
+  }
+
+  // Get current user
+  const user = await userManager.findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Normal user must have profile edit permission
+  if (user.role !== "ADMIN" && !user.can_edit_profile) {
+    throw new ApiError(
+      403,
+      "You are not allowed to edit your profile"
+    );
+  }
+
+  // Generate unique S3 object key
+  const extension = req.file.originalname
+    .split(".")
+    .pop()
+    .toLowerCase();
+
+  const imageKey =
+    `users/${userId}/profile/${crypto.randomUUID()}.${extension}`;
+
+  // Upload new image first
+  await uploadToS3({
+    key: imageKey,
+    buffer: req.file.buffer,
+    contentType: req.file.mimetype,
+  });
+
+  const oldImageKey = user.profile_image_key;
+
+  // Save new key in DB
+  await userManager.updateProfileImage(userId, imageKey);
+
+  // Delete previous image after successful DB update
+  if (oldImageKey) {
+    await deleteFromS3(oldImageKey);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Profile image updated successfully",
+    data: {
+      profile_image_key: imageKey,
+    },
+  });
+});
+
 module.exports = {
   register,
   verifyEmail,
@@ -943,5 +1003,6 @@ module.exports = {
   getMySessions,
   revokeSession,
   heartbeat,
-  getMyPresence
+  getMyPresence,
+  updateProfileImage
 };

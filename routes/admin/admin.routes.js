@@ -1,8 +1,9 @@
 const express = require("express");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const adminMiddleware = require("../../middlewares/admin.middleware");
+const upload = require("../../middlewares/upload.middleware");
 const validationMiddleware = require("../../middlewares/validation.middleware");
-const { createUser, getUsers, getUserDetails, updateUser, deactivateUser, activateUser, deleteUser, getDepartments, getDesignations, getStates, getCities, getAuditLogs, updateProfilePermission } = require("../../controllers/admin/admin.controller");
+const { createUser, getUsers, getUserDetails, updateUser, deactivateUser, activateUser, deleteUser, getDepartments, getDesignations, getStates, getCities, getAuditLogs, updateProfilePermission, updateUserProfileImage } = require("../../controllers/admin/admin.controller");
 const { createUserValidation, updateUserValidation, updateProfilePermissionValidation } = require("../../validations/admin/admin.validation");
 
 const router = express.Router();
@@ -23,5 +24,6 @@ router.get("/states", getStates);
 router.get("/cities", getCities);
 router.get("/audit-logs", getAuditLogs);
 router.patch( "/users/:id/profile-permission", updateProfilePermissionValidation, validationMiddleware, updateProfilePermission );
+router.patch( "/users/:id/profile-image", upload.single("profileImage"), updateUserProfileImage );
 
 module.exports = router;
