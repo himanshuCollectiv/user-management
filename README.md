@@ -1,8 +1,10 @@
 # User Management System (UMS)
 
-A secure and modular **User Management System (UMS)** built with **Node.js, Express.js, PostgreSQL (Neon), Sequelize, JWT, and Nodemailer**.
+A secure and modular **User Management System (UMS)** built with **Node.js, Express.js, PostgreSQL, Sequelize, JWT, and Nodemailer**.
 
 The system provides authentication, email verification, password management, profile management, session management, role-based admin access, user search/filtering, account activation/deactivation, profile-edit permissions, audit logging, presence tracking, read-only master-data APIs, and scheduled cleanup jobs.
+
+The PostgreSQL database is accessed/managed during development using **DBeaver**.
 
 ---
 
@@ -58,6 +60,9 @@ Supported roles:
 - Refresh tokens
 - Refresh Token Rotation
 - Refresh-token family/session tracking
+- Refresh-token based session store
+- Active-session filtering using revocation, replacement, and expiry state
+- Session-level `last_seen_at`
 - HTTP-only cookie based token handling
 - Password reset through email
 - Change password
@@ -91,7 +96,7 @@ Supported roles:
 | Node.js | Backend runtime |
 | Express.js | REST API framework |
 | PostgreSQL | Relational database |
-| Neon PostgreSQL | Cloud PostgreSQL |
+| DBeaver | PostgreSQL database client/development tool |
 | Sequelize | ORM/database access |
 | JWT | Authentication |
 | bcrypt | Password hashing |
@@ -338,13 +343,18 @@ Important fields:
 | `is_email_verified` | Email verification status |
 | `is_active` | Account status |
 | `can_edit_profile` | Controls whether the user can edit profile information |
-| `last_seen_at` | Last heartbeat/last-seen timestamp |
 
 ### Presence
 
 `is_online` is **not stored as a database column**.
 
-It is derived from `last_seen_at`.
+Presence is tracked at the session level using:
+
+```text
+ums_refresh_tokens.last_seen_at
+```
+
+The online state is derived from the active session records rather than stored on `ums_users`.
 
 ---
 
@@ -432,6 +442,7 @@ revoked_at
 replaced_by_id
 device_info
 ip_address
+last_seen_at
 created_at
 ```
 
@@ -440,6 +451,19 @@ The refresh-token table is also used as the persistent session store.
 The raw refresh token is never stored in the database.
 
 Only its hash is stored.
+
+### Active Session
+
+A refresh-token record is considered the current active session token when:
+
+```text
+family_id is present
+revoked_at IS NULL
+replaced_by_id IS NULL
+expires_at > current time
+```
+
+This prevents revoked, replaced, or expired refresh-token records from being treated as active sessions.
 
 ### Token Relationships
 
@@ -451,7 +475,23 @@ RT1 → RT2 → RT3
 
 `family_id` groups refresh tokens belonging to the same login/session family.
 
+`last_seen_at` tracks the most recent heartbeat for the session and is used by the presence functionality.
+
 ---
+
+### Refresh-Token Session Tracking
+
+The refresh-token table is not only used for rotation. It also acts as the application's session store.
+
+Session-related APIs use the refresh-token records to identify active sessions by checking:
+
+```text
+revoked_at IS NULL
+replaced_by_id IS NULL
+expires_at > current time
+```
+
+The session's `last_seen_at` is updated by the heartbeat API.
 
 ## User Tokens
 
@@ -761,7 +801,10 @@ ip_address
 created_at
 expires_at
 revoked_at
+last_seen_at
 ```
+
+`last_seen_at` is stored only on the refresh-token/session record.
 
 This allows individual login sessions to be managed independently.
 
@@ -877,7 +920,6 @@ Returns:
 - Email verification status
 - Account status
 - Profile permission
-- Last seen
 - Department
 - Designation
 - Location
@@ -916,21 +958,33 @@ When profile editing is restricted for a user, the user cannot use the profile u
 
 # Presence and Heartbeat
 
+Presence is based on **session-level `last_seen_at`** stored in `ums_refresh_tokens`.
+
 ## Heartbeat
 
 ```text
 PATCH /api/v1/auth/users/heartbeat
 ```
 
-The heartbeat endpoint updates:
+The endpoint requires authentication through the access token.
+
+Request body:
+
+```json
+{
+  "familyId": "session-family-id"
+}
+```
+
+The API finds the user's matching active session and updates that refresh-token session's:
 
 ```text
 last_seen_at
 ```
 
-for the authenticated user.
+The JWT itself is not changed by the heartbeat operation.
 
-The field is used as the source for presence calculation.
+The `familyId` identifies which login/session should receive the heartbeat update.
 
 ---
 
@@ -940,15 +994,39 @@ The field is used as the source for presence calculation.
 GET /api/v1/auth/users/presence
 ```
 
-Presence is derived from the user's `last_seen_at`.
+The presence API checks the user's active refresh-token sessions.
 
-`is_online` is not persisted as a database column.
+A user is considered online when **at least one active session has a `last_seen_at` within the last 60 seconds**.
 
-The application determines online status from the most recent heartbeat/last-seen timestamp.
+Conceptually:
+
+```text
+Active Sessions
+      ↓
+Check last_seen_at
+      ↓
+Any session seen within 60 seconds?
+      ↓
+YES → is_online: true
+NO  → is_online: false
+```
+
+`is_online` is a derived value and is **not stored as a database column**.
+
 
 ---
 
 # Session Management
+
+The refresh-token table acts as the persistent session store.
+
+A session is considered active only when its refresh-token record satisfies:
+
+```text
+revoked_at IS NULL
+replaced_by_id IS NULL
+expires_at > current time
+```
 
 ## Get Sessions
 
@@ -956,7 +1034,7 @@ The application determines online status from the most recent heartbeat/last-see
 GET /api/v1/auth/users/sessions
 ```
 
-Returns active session information:
+Returns active session information such as:
 
 ```text
 family_id
@@ -964,7 +1042,10 @@ device_info
 ip_address
 created_at
 expires_at
+last_seen_at
 ```
+
+This endpoint uses the current refresh-token/session state rather than treating every historical refresh-token row as an active session.
 
 ## Revoke Session
 
@@ -1516,7 +1597,7 @@ templates/emails/
 |---|---|---|
 | GET | `/api/v1/auth/users/profile` | Get own profile |
 | PATCH | `/api/v1/auth/users/profile` | Update own profile |
-| PATCH | `/api/v1/auth/users/heartbeat` | Update `last_seen_at` |
+| PATCH | `/api/v1/auth/users/heartbeat` | Update session `last_seen_at` using `familyId` |
 | GET | `/api/v1/auth/users/presence` | Get derived online/presence state |
 | GET | `/api/v1/auth/users/sessions` | Get active sessions |
 | DELETE | `/api/v1/auth/users/sessions/:familyId` | Revoke a session |
@@ -1738,6 +1819,7 @@ Common status codes:
 - User profile
 - Profile-edit permission
 - Session management
+- Session-level `last_seen_at` tracking through refresh-token records
 - Heartbeat
 - Presence
 - Admin user management
