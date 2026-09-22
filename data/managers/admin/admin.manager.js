@@ -170,9 +170,10 @@ const findUserDetails = async (userId) => {
   });
 };
 
-const deleteUser = async (userId) => {
+const deleteUser = async (userId,transaction) => {
   return await User.destroy({
     where: { id: userId },
+    transaction
   });
 };
 
@@ -211,6 +212,10 @@ const findCitiesByState = async (state) => {
   });
 };
 
+const findLocationById = async (locationId, transaction) => {
+  return await Location.findByPk(locationId, { transaction });
+};
+
 module.exports = {
   findDepartmentByName,
   findDesignationByName,
@@ -222,5 +227,6 @@ module.exports = {
   findAllDepartments,
   findAllDesignations,
   findAllStates,
-  findCitiesByState
+  findCitiesByState,
+  findLocationById
 };

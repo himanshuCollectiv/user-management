@@ -2,11 +2,13 @@ const sequelize = require("../../data/connection/connection");
 
 const userManager = require("../../data/managers/users/user.manager");
 const adminManager = require("../../data/managers/admin/admin.manager");
+const auditManager = require("../../data/managers/admin/audit.manager");
 
 const ApiError = require("../../utils/ApiError");
 const asyncHandler = require("../../utils/asyncHandler");
 const { hashPassword } = require("../../utils/password.util");
-const { normalizeText } = require("../../utils/string.utils")
+const { normalizeText } = require("../../utils/string.utils");
+const { addChange } = require("../../utils/audit.utils");
 
 //create-user-byAdmin
 const createUser = asyncHandler(async (req, res) => {
@@ -93,6 +95,19 @@ const createUser = asyncHandler(async (req, res) => {
       },
       transaction
     );
+
+  await auditManager.createAuditLog({
+   adminId: req.user.userId,
+    action: "CREATE_USER",
+    targetUserId: newUser.id,
+    details: {
+      message: "User account created",
+      role: newUser.role,
+      email: newUser.email,
+    },
+    ipAddress: req.ip,
+    transaction,
+  });    
 
     await transaction.commit();
 
@@ -187,6 +202,7 @@ const getUserDetails = asyncHandler(async (req, res) => {
 //update-user-data
 const updateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
   const {
     name,
     email,
@@ -194,33 +210,49 @@ const updateUser = asyncHandler(async (req, res) => {
     role,
   } = req.body;
 
-  let{ state,
+  let {
+    state,
     city,
     department,
-    designation,}=req.body
+    designation,
+  } = req.body;
 
-  state = normalizeText(state);
-  city = normalizeText(city);
-  department = normalizeText(department);
-  designation = normalizeText(designation);
+  state = state !== undefined ? normalizeText(state) : undefined;
+  city = city !== undefined ? normalizeText(city) : undefined;
+  department =
+    department !== undefined
+      ? normalizeText(department)
+      : undefined;
+  designation =
+    designation !== undefined
+      ? normalizeText(designation)
+      : undefined;
 
   const userId = Number(id);
 
   if (userId === req.user.userId) {
-    throw new ApiError(403, "Admin cannot edit their own account");
+    throw new ApiError(
+      403,
+      "Admin cannot edit their own account"
+    );
   }
 
-  const existingUser = await userManager.findUserById(userId);
+  const existingUser =
+    await userManager.findUserById(userId);
 
   if (!existingUser) {
     throw new ApiError(404, "User not found");
   }
 
   if (email && email !== existingUser.email) {
-    const emailUser = await userManager.findUserByEmail(email);
+    const emailUser =
+      await userManager.findUserByEmail(email);
 
     if (emailUser && emailUser.id !== userId) {
-      throw new ApiError(409, "User with this email already exists");
+      throw new ApiError(
+        409,
+        "User with this email already exists"
+      );
     }
   }
 
@@ -228,6 +260,29 @@ const updateUser = asyncHandler(async (req, res) => {
 
   try {
     const updateData = {};
+    const changes = {};
+
+    // Basic fields
+    addChange(
+      changes,
+      "name",
+      existingUser.name,
+      name
+    );
+
+    addChange(
+      changes,
+      "email",
+      existingUser.email,
+      email
+    );
+
+    addChange(
+      changes,
+      "role",
+      existingUser.role,
+      role
+    );
 
     if (name !== undefined) {
       updateData.name = name;
@@ -241,38 +296,67 @@ const updateUser = asyncHandler(async (req, res) => {
       updateData.role = role;
     }
 
+    // Password
     if (password !== undefined) {
-      updateData.password_hash = await hashPassword(password);
+      updateData.password_hash =
+        await hashPassword(password);
+
+      changes.password = {
+        message: "Password changed",
+      };
     }
 
-    if (
-      state !== undefined ||
-      city !== undefined
-    ) {
-      if (!state || !city) {
-        throw new ApiError(
-          400,
-          "State and city are required together"
-        );
-      }
-
-      let location = await userManager.findLocation(
-        state,
-        city,
-        transaction
-      );
-
-      if (!location) {
-        location = await userManager.createLocation(
-          state,
-          city,
+    // Location
+    if (state !== undefined || city !== undefined) {
+      const currentLocation =
+        await adminManager.findLocationById(
+          existingUser.location_id,
           transaction
         );
+
+      const newState =
+        state !== undefined
+          ? state
+          : currentLocation.state;
+
+      const newCity =
+        city !== undefined
+          ? city
+          : currentLocation.city;
+
+      let location =
+        await userManager.findLocation(
+          newState,
+          newCity,
+          transaction
+        );
+
+      if (!location) {
+        location =
+          await userManager.createLocation(
+            newState,
+            newCity,
+            transaction
+          );
       }
 
       updateData.location_id = location.id;
+
+      if (location.id !== existingUser.location_id) {
+        changes.location = {
+          from: {
+            state: currentLocation.state,
+            city: currentLocation.city,
+          },
+          to: {
+            state: newState,
+            city: newCity,
+          },
+        };
+      }
     }
 
+    // Department
     if (department !== undefined) {
       let departmentRecord =
         await adminManager.findDepartmentByName(
@@ -288,8 +372,19 @@ const updateUser = asyncHandler(async (req, res) => {
           );
       }
 
-      updateData.department_id = departmentRecord.id;
+      updateData.department_id =
+        departmentRecord.id;
 
+      if (
+        departmentRecord.id !==
+        existingUser.department_id
+      ) {
+        changes.department = {
+          to: department,
+        };
+      }
+
+      // Designation
       if (designation !== undefined) {
         let designationRecord =
           await adminManager.findDesignationByName(
@@ -307,7 +402,17 @@ const updateUser = asyncHandler(async (req, res) => {
             );
         }
 
-        updateData.designation_id = designationRecord.id;
+        updateData.designation_id =
+          designationRecord.id;
+
+        if (
+          designationRecord.id !==
+          existingUser.designation_id
+        ) {
+          changes.designation = {
+            to: designation,
+          };
+        }
       }
     } else if (designation !== undefined) {
       throw new ApiError(
@@ -316,15 +421,33 @@ const updateUser = asyncHandler(async (req, res) => {
       );
     }
 
+    // Nothing to update
     if (Object.keys(updateData).length === 0) {
-      throw new ApiError(400, "No data provided for update");
+      throw new ApiError(
+        400,
+        "No data provided for update"
+      );
     }
 
+    // Update user
     await userManager.updateUser(
       userId,
       updateData,
       transaction
     );
+
+    // Audit log
+    await auditManager.createAuditLog({
+      adminId: req.user.userId,
+      action: "UPDATE_USER",
+      targetUserId: userId,
+      details: {
+        message: "User account updated",
+        changes,
+      },
+      ipAddress: req.ip,
+      transaction,
+    });
 
     await transaction.commit();
 
@@ -377,6 +500,17 @@ const deactivateUser = asyncHandler(async (req, res) => {
       transaction
     );
 
+  await auditManager.createAuditLog({
+    adminId: req.user.userId,
+    action: "DEACTIVATE_USER",
+    targetUserId: userId,
+    details: {
+      message: "User account deactivated",
+    },
+    ipAddress: req.ip,
+    transaction,
+  }); 
+
     await transaction.commit();
 
     res.status(200).json({
@@ -392,12 +526,11 @@ const deactivateUser = asyncHandler(async (req, res) => {
 
 
 //activate-user
-const activateUser = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const userId = Number(id);
+const activateUser = async (req, res) => {
+  const userId = Number(req.params.id);
 
-  if (userId === req.user.userId) {
-    throw new ApiError(403, "Admin cannot activate their own account");
+  if (req.user.userId === userId) {
+    throw new ApiError(403, "You cannot activate yourself");
   }
 
   const user = await userManager.findUserById(userId);
@@ -406,25 +539,45 @@ const activateUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  await userManager.updateUser(userId, {
-    is_active: true,
-  });
+  const transaction = await sequelize.transaction();
 
-  res.status(200).json({
-    success: true,
-    message: "User activated successfully",
-  });
-});
+  try {
+    await userManager.updateUser(
+      userId,
+      { is_active: true },
+      transaction
+    );
 
+    await auditManager.createAuditLog({
+      adminId: req.user.userId,
+      action: "ACTIVATE_USER",
+      targetUserId: userId,
+      details: {
+        message: "User account activated",
+      },
+      ipAddress: req.ip,
+      transaction,
+    });
+
+    await transaction.commit();
+
+    res.status(200).json({
+      success: true,
+      message: "User activated successfully",
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
 
 
 //delete-user
-const deleteUser = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const userId = Number(id);
+const deleteUser = async (req, res) => {
+  const userId = Number(req.params.id);
 
-  if (userId === req.user.userId) {
-    throw new ApiError(403, "Admin cannot delete their own account");
+  if (req.user.userId === userId) {
+    throw new ApiError(403, "You cannot delete yourself");
   }
 
   const user = await userManager.findUserById(userId);
@@ -433,13 +586,36 @@ const deleteUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  await adminManager.deleteUser(userId);
+  const transaction = await sequelize.transaction();
 
-  res.status(200).json({
-    success: true,
-    message: "User deleted successfully",
-  });
-});
+  try {
+    await auditManager.createAuditLog({
+      adminId: req.user.userId,
+      action: "DELETE_USER",
+      targetUserId: userId,
+      details: {
+        message: "User account deleted",
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      ipAddress: req.ip,
+      transaction,
+    });
+
+    await adminManager.deleteUser(userId, transaction);
+
+    await transaction.commit();
+
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
 
 
 
@@ -511,6 +687,33 @@ const getCities = asyncHandler(async (req, res) => {
 
 
 
+//audit-logs
+const getAuditLogs = async (req, res) => {
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(
+    Math.max(Number(req.query.limit) || 10, 1),
+    100
+  );
+
+  const result = await auditManager.findAuditLogs({
+    page,
+    limit,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      logs: result.rows,
+      pagination: {
+        page,
+        limit,
+        total: result.count,
+        totalPages: Math.ceil(result.count / limit),
+      },
+    },
+  });
+};
+
 module.exports = {
   createUser,
   getUsers,
@@ -522,5 +725,6 @@ module.exports = {
   getDepartments,
   getDesignations,
   getStates,
-  getCities
+  getCities,
+  getAuditLogs
 };

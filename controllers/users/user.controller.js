@@ -108,9 +108,9 @@ const register = asyncHandler(async (req, res) => {
     // 7. Hash token before storing it
     const tokenHash = hashToken(verificationToken);
 
-    // 8. Token expiry - 24 hours
+    // 8. Token expiry - 2 minutes
     const expiresAt = new Date(
-      Date.now() + 24 * 60 * 60 * 1000
+      Date.now() +  2 * 60 * 1000
     );
 
     // 9. Save verification token
@@ -534,9 +534,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
   // Hash token before storing
   const tokenHash = hashToken(resetToken);
 
-  // Token expiry - 24 hours
+  // Token expiry - 2 minutes
   const expiresAt = new Date(
-    Date.now() + 24 * 60 * 60 * 1000
+    Date.now() + 2 * 60 * 1000
   );
 
   // Save password reset token
@@ -719,10 +719,11 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 //updateMyProfile
 const updateMyProfile = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
+
   let { name, state, city } = req.body;
 
-  state = normalizeText(state);
-  city = normalizeText(city);
+  state = state !== undefined ? normalizeText(state) : undefined;
+  city = city !== undefined ? normalizeText(city) : undefined;
 
   const user = await userManager.findUserById(userId);
 
@@ -740,20 +741,32 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     }
 
     if (state !== undefined || city !== undefined) {
-      if (!state || !city) {
-        throw new ApiError(400, "State and city are required together");
-      }
+      const currentLocation =
+        await userManager.findLocationById(
+          user.location_id,
+          transaction
+        );
+
+      const newState =
+        state !== undefined
+          ? state
+          : currentLocation.state;
+
+      const newCity =
+        city !== undefined
+          ? city
+          : currentLocation.city;
 
       let location = await userManager.findLocation(
-        state,
-        city,
+        newState,
+        newCity,
         transaction
       );
 
       if (!location) {
         location = await userManager.createLocation(
-          state,
-          city,
+          newState,
+          newCity,
           transaction
         );
       }
@@ -762,7 +775,10 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     }
 
     if (Object.keys(updateData).length === 0) {
-      throw new ApiError(400, "No profile data provided");
+      throw new ApiError(
+        400,
+        "No profile data provided"
+      );
     }
 
     await userManager.updateUser(
@@ -773,7 +789,8 @@ const updateMyProfile = asyncHandler(async (req, res) => {
 
     await transaction.commit();
 
-    const updatedUser = await userManager.findUserById(userId);
+    const updatedUser =
+      await userManager.findUserById(userId);
 
     res.status(200).json({
       success: true,

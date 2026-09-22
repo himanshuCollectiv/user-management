@@ -11,6 +11,7 @@ require("./data/models/locations/location.model");
 require("./data/models/users/user.model");
 require("./data/models/users/refresh-token.model");
 require("./data/models/users/user-token.model");
+require("./data/models/audit-logs/audit-log.model");
 
 const routes =require("./routes/index");
 
