@@ -88,7 +88,16 @@ const updateUserValidation = [
     .withMessage("Designation cannot be empty"),
 ];
 
+const updateProfilePermissionValidation = [
+  body("canEditProfile")
+    .isBoolean()
+    .withMessage("canEditProfile must be a boolean"),
+];
+
+
+
 module.exports = {
   createUserValidation,
-  updateUserValidation
+  updateUserValidation,
+  updateProfilePermissionValidation
 };

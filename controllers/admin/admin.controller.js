@@ -687,6 +687,74 @@ const getCities = asyncHandler(async (req, res) => {
 
 
 
+const updateProfilePermission = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const { canEditProfile } = req.body;
+  console.log(canEditProfile, typeof canEditProfile);
+  if (userId === req.user.userId) {
+    throw new ApiError(
+      403,
+      "Admin cannot change their own profile permission"
+    );
+  }
+
+  const existingUser = await userManager.findUserById(userId);
+
+  if (!existingUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  if (existingUser.role === "admin") {
+    throw new ApiError(
+      403,
+      "Profile permission cannot be changed for an admin"
+    );
+  }
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    await userManager.updateUser(
+      userId,
+      {
+        can_edit_profile: canEditProfile,
+      },
+      transaction
+    );
+
+    await auditManager.createAuditLog({
+      adminId: req.user.userId,
+      action: canEditProfile
+        ? "ALLOW_PROFILE_EDIT"
+        : "DENY_PROFILE_EDIT",
+      targetUserId: userId,
+      details: {
+        message: canEditProfile
+          ? "Profile editing permission allowed"
+          : "Profile editing permission denied",
+      },
+      ipAddress: req.ip,
+      transaction,
+    });
+
+    await transaction.commit();
+
+    res.status(200).json({
+      success: true,
+      message: canEditProfile
+        ? "Profile editing permission allowed"
+        : "Profile editing permission denied",
+    });
+  } catch (error) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    throw error;
+  }
+});
+
+
 //audit-logs
 const getAuditLogs = async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
@@ -714,6 +782,9 @@ const getAuditLogs = async (req, res) => {
   });
 };
 
+
+
+
 module.exports = {
   createUser,
   getUsers,
@@ -726,5 +797,6 @@ module.exports = {
   getDesignations,
   getStates,
   getCities,
-  getAuditLogs
+  getAuditLogs,
+  updateProfilePermission
 };

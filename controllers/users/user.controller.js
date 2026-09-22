@@ -18,7 +18,7 @@ const { USER_ROLE } = require("../../lib/roles");
 
 const { USER_TOKEN_TYPES,} = require("../../lib/user-token-types");
 
-const normalizeText = require("../../utils/string.utils")
+const {normalizeText} = require("../../utils/string.utils")
 
 
 
@@ -731,6 +731,13 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
+  if ( user.role !== "admin" && !user.can_edit_profile ) {
+    throw new ApiError(
+      403,
+      "You are not allowed to edit your profile"
+    );
+  }
+
   const transaction = await sequelize.transaction();
 
   try {
@@ -865,6 +872,16 @@ const revokeSession = asyncHandler(async (req, res) => {
 
 
 
+const heartbeat = asyncHandler(async (req, res) => {
+  await userManager.updateLastSeen(req.user.userId);
+
+  res.status(200).json({
+    success: true,
+    message: "User activity updated successfully",
+  });
+});
+
+
 module.exports = {
   register,
   verifyEmail,
@@ -879,5 +896,5 @@ module.exports = {
   updateMyProfile,
   getMySessions,
   revokeSession,
-  
+  heartbeat
 };

@@ -184,6 +184,17 @@ const revokeAllUserSessions = async (userId, transaction) => {
   );
 };
 
+const updateLastSeen = async (userId) => {
+  return await User.update(
+    {
+      last_seen_at: new Date(),
+    },
+    {
+      where: { id: userId },
+    }
+  );
+};
+
 module.exports = {
   findUserByEmail,
   createUser,
@@ -200,5 +211,6 @@ module.exports = {
   findUserById,
   findUserProfileById,
   findUserSessions,
-  revokeAllUserSessions
+  revokeAllUserSessions,
+  updateLastSeen
 };
