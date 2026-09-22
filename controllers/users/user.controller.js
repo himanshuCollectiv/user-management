@@ -272,10 +272,11 @@ const login = asyncHandler(async (req, res) => {
   const savedRefreshToken = await userManager.createRefreshToken({
     user_id: user.id,
     family_id: familyId,
-    token_hash: refreshTokenHash,
+    token_hash: hashToken(refreshToken),
     expires_at: expiresAt,
-    device_info: deviceInfo,
-    ip_address: ipAddress,
+    last_seen_at: new Date(),
+    device_info: req.headers["user-agent"],
+    ip_address: req.ip,
   });
 
   if (!savedRefreshToken) {
@@ -397,6 +398,7 @@ const refreshToken = asyncHandler(async (req, res) => {
     family_id: familyId,
     token_hash: newRefreshTokenHash,
     expires_at: newExpiresAt,
+    last_seen_at: new Date(),
     device_info: storedToken.device_info,
     ip_address: storedToken.ip_address,
   });
@@ -690,7 +692,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
       is_active: user.is_active,
       can_edit_profile: user.can_edit_profile,
       last_seen_at: user.last_seen_at,
-
+      
       department: user.department,
       designation: user.designation,
       location: user.location,
@@ -871,13 +873,57 @@ const revokeSession = asyncHandler(async (req, res) => {
 });
 
 
-
+//update-last-seen
 const heartbeat = asyncHandler(async (req, res) => {
-  await userManager.updateLastSeen(req.user.userId);
+  const userId = req.user.userId;
+  const { familyId } = req.body;
+
+  if (!familyId) {
+    throw new ApiError(400, "Family ID is required");
+  }
+
+  const updated = await userManager.updateSessionLastSeen(
+    userId,
+    familyId
+  );
+
+  if (!updated[0]) {
+    throw new ApiError(401, "Session is no longer active");
+  }
 
   res.status(200).json({
     success: true,
     message: "User activity updated successfully",
+  });
+});
+
+
+//get-presence(online)
+const getMyPresence = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+
+  const sessions =
+    await userManager.findActiveUserSessions(userId);
+
+  const now = Date.now();
+  const ONLINE_THRESHOLD = 60 * 1000;
+
+  const isOnline = sessions.some((session) => {
+    if (!session.last_seen_at) {
+      return false;
+    }
+
+    return (
+      now - new Date(session.last_seen_at).getTime() <=
+      ONLINE_THRESHOLD
+    );
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      is_online: isOnline,
+    },
   });
 });
 
@@ -896,5 +942,6 @@ module.exports = {
   updateMyProfile,
   getMySessions,
   revokeSession,
-  heartbeat
+  heartbeat,
+  getMyPresence
 };

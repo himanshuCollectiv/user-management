@@ -52,11 +52,7 @@ User.init(
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: false,
-        },
-        last_seen_at:{
-            type:DataTypes.DATE,
-            allowNull:true
-        },        
+        },      
         is_active: {
             type: DataTypes.BOOLEAN,
             allowNull: false,

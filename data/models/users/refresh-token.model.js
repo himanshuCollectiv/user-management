@@ -29,6 +29,11 @@ RefreshToken.init(
       allowNull: false,
       unique: true,
     },
+    
+    last_seen_at:{
+      type:DataTypes.DATE,
+      allowNull:true
+    },      
 
     device_info: {
       type: DataTypes.STRING,

@@ -4,7 +4,7 @@ const Department = require("../../models/departments/department.model")
 const Designation = require("../../models/designations/designation.model")
 const UserToken = require("../../models/users/user-token.model");
 const RefreshToken = require("../../models/users/refresh-token.model");
-
+const {Op} = require("sequelize")
 
 
 const findUserByEmail = async (email, transaction) => {
@@ -156,11 +156,16 @@ const findUserSessions = async (userId) => {
       user_id: userId,
       revoked_at: null,
       replaced_by_id: null,
+      expires_at: {
+        [Op.gt]: new Date(),
+      },
+
     },
     attributes: [
       "family_id",
       "device_info",
       "ip_address",
+      "last_seen_at",
       "created_at",
       "expires_at",
     ],
@@ -184,15 +189,40 @@ const revokeAllUserSessions = async (userId, transaction) => {
   );
 };
 
-const updateLastSeen = async (userId) => {
-  return await User.update(
+const updateSessionLastSeen = async (userId, familyId) => {
+  return await RefreshToken.update(
     {
       last_seen_at: new Date(),
     },
     {
-      where: { id: userId },
+      where: {
+        user_id: userId,
+        family_id: familyId,
+        revoked_at: null,
+        replaced_by_id: null,
+        expires_at: {
+          [Op.gt]: new Date(),
+        },
+      },
     }
   );
+};
+
+
+const findActiveUserSessions = async (userId) => {
+  return await RefreshToken.findAll({
+    where: {
+      user_id: userId,
+      revoked_at: null,
+      expires_at: {
+        [Op.gt]: new Date(),
+      },
+    },
+    attributes: [
+      "family_id",
+      "last_seen_at",
+    ],
+  });
 };
 
 module.exports = {
@@ -212,5 +242,6 @@ module.exports = {
   findUserProfileById,
   findUserSessions,
   revokeAllUserSessions,
-  updateLastSeen
+  updateSessionLastSeen,
+  findActiveUserSessions
 };
