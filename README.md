@@ -8,6 +8,7 @@ The PostgreSQL database is accessed/managed during development using **DBeaver**
 
 ---
 
+
 ## Table of Contents
 
 - [Project Overview](#project-overview)
@@ -97,6 +98,7 @@ Supported roles:
 | Express.js | REST API framework |
 | PostgreSQL | Relational database |
 | DBeaver | PostgreSQL database client/development tool |
+| AWS S3 | Object storage for user profile images |
 | Sequelize | ORM/database access |
 | JWT | Authentication |
 | bcrypt | Password hashing |
@@ -1939,3 +1941,69 @@ Centralized error handling
 ```
 
 The User and Admin modules remain separated, database operations are handled through Managers, and external email integration is isolated in the dedicated email service.
+
+
+## AWS S3 — Profile Image Storage
+
+AWS S3 is used for storing user profile images. Profile image upload is a **separate workflow** and is not part of user registration.
+
+### Storage Design
+
+- **S3 bucket:** `ums-users-image-2026`
+- The `User` table contains nullable `profile_image_key`.
+- The database stores the **S3 object key**, not the image binary.
+- Uploaded images are stored in AWS S3.
+- No local disk persistence is used for uploaded profile images.
+
+### Upload Handling
+
+- Multer uses `memoryStorage`.
+- Accepted image formats: JPEG, PNG, WEBP.
+- Maximum image size: **5 MB**.
+- Files are kept in memory while the backend processes the S3 upload.
+
+### Backend Integration
+
+```text
+@aws-sdk/client-s3
+utils/s3.utils.js
+```
+
+Environment variables:
+
+```env
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET_NAME=
+```
+
+### Profile Image Workflows
+
+- Normal users have a separate profile-image upload workflow.
+- Admins have a separate workflow to upload/update a profile image for a specific user.
+- Admin profile-image management bypasses the target user's `can_edit_profile=false` restriction.
+- Registration does not accept or upload a profile image.
+
+### S3 IAM Configuration
+
+**IAM policy:** `UMS-S3-Profile-Images-Policy`
+
+**IAM group:** `UMS-S3-Profile-Images`
+
+Allowed object actions:
+
+```text
+s3:PutObject
+s3:GetObject
+s3:DeleteObject
+```
+
+Resource scope:
+
+```text
+arn:aws:s3:::ums-users-image-2026/*
+```
+
+AWS credentials are supplied through environment variables and are not hard-coded in source code.
+
