@@ -87,7 +87,7 @@ const deleteUserToken = async (tokenId, transaction) => {
   });
 };
 
-const createRefreshToken = async (tokenData, transaction) => {
+const createRefreshToken = async (tokenData) => {
   return await RefreshToken.create(tokenData);
 };
 
@@ -127,7 +127,6 @@ const findUserProfileById = async (userId) => {
       "is_email_verified",
       "is_active",
       "can_edit_profile",
-      "last_seen_at",
     ],
     include: [
       {

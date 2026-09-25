@@ -689,8 +689,6 @@ const getMyProfile = asyncHandler(async (req, res) => {
       is_email_verified: user.is_email_verified,
       is_active: user.is_active,
       can_edit_profile: user.can_edit_profile,
-      last_seen_at: user.last_seen_at,
-      
       department: user.department,
       designation: user.designation,
       location: user.location,
