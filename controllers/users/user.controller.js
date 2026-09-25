@@ -221,9 +221,6 @@ const verifyEmail = asyncHandler(async (req, res) => {
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  const deviceInfo = req.headers["user-agent"];
-  const ipAddress = req.ip;
-
   // 1. Find user
   const user = await userManager.findUserByEmail(email);
 
@@ -899,6 +896,7 @@ const heartbeat = asyncHandler(async (req, res) => {
 });
 
 
+
 //get-presence(online)
 const getMyPresence = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
@@ -987,6 +985,7 @@ const updateProfileImage = asyncHandler(async (req, res) => {
     },
   });
 });
+
 
 module.exports = {
   register,

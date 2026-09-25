@@ -821,6 +821,19 @@ const updateUserProfileImage = asyncHandler(async (req, res) => {
 
   await userManager.updateProfileImage(targetUserId, imageKey);
 
+  // Create audit log
+  await auditLogManager.createAuditLog({
+    adminId: req.user.userId,
+    action: "PROFILE_IMAGE_UPDATED",
+    targetUserId,
+    details: {
+      new_profile_image_key: imageKey,
+      old_profile_image_key: oldImageKey || null,
+    },
+    ipAddress: req.ip,
+  });
+
+  // Delete old image after successful DB update and audit log
   if (oldImageKey) {
     await deleteFromS3(oldImageKey);
   }
